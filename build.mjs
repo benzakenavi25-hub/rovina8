@@ -15,12 +15,13 @@ const LDIR = path.join(ROOT, 'listings', slug);
 const d = JSON.parse(fs.readFileSync(path.join(LDIR, 'data.json'), 'utf8'));
 const OUT_IMG = path.join(ROOT, 'assets', 'img');
 const WIDTHS = [1000, 2000];
-// themes: "light" (drafting grid), "dark" (tree rings), "corner" (a light theme with its own palette and the light-rays motif)
-const THEME = ['light', 'dark', 'corner'].includes(d.theme) ? d.theme : 'dark';
-const LIGHT = THEME !== 'dark';
+// themes: "light" (drafting grid), "dark" (tree rings), "corner" (light, light-rays motif), "green" (dark graphite-green, slab motif)
+const THEME = ['light', 'dark', 'corner', 'green'].includes(d.theme) ? d.theme : 'dark';
+const DARK = THEME === 'dark' || THEME === 'green';
+const LIGHT = !DARK;
 const INTRO = d.intro === 'door' ? 'door' : d.intro === 'none' ? 'none' : 'elevator';
-const ACCENT = LIGHT ? '#9A5530' : '#B08A64';
-const GROUND = THEME === 'corner' ? '#EEF0EC' : THEME === 'light' ? '#F2EDE6' : '#1E1915';
+const ACCENT = THEME === 'green' ? '#C98A5E' : LIGHT ? '#9A5530' : '#B08A64';
+const GROUND = { corner: '#EEF0EC', light: '#F2EDE6', green: '#1F2622' }[THEME] || '#1E1915';
 const has = v => v != null && v !== '' && !(Array.isArray(v) && !v.length);
 
 /* ------------------------------------------------------------------ photos */
@@ -44,7 +45,9 @@ const K = {
   gdFrom: d.gardens && !d.film ? use(d.gardens.from) : null, gdTo: d.gardens && !d.film ? use(d.gardens.to) : null,
   garden: (d.film ? [] : (d.gardens || {}).photos || []).map(g => use(g.photo)),
   gallery: (d.gallery || []).map(g => use(g.photo)),
-  corner: ((d.corner || {}).items || []).map(it => use(it.photo)),
+  rooms: ((d.rooms || {}).items || []).map(it => (it.photos || []).map(n => use(n))),
+  bcPan: d.balcony ? use(d.balcony.pan) : null,
+  bcPair: ((d.balcony || {}).pair || []).map(n => use(n)),
 };
 const fullscreen = new Set((P.fullscreen || [P.hero, P.signature]).map(String));
 
@@ -230,121 +233,57 @@ async function processStaging() {
   console.log(`staging ${w}×${h}, ${s.styles.length} styles`);
 }
 
-/* ------------------------------------------------------------------ scanned plan pages (corner + keys) */
-// One scanned PDF with several pages (plans/*.pdf, the first one, or d.plansFile). Each page is rendered once at viewportScale 4,
-// flattened on white, and cut by [left, top, width, height] page fractions. Never trimmed: the corner rects depend on the exact crop.
-const hexRgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
-const PAGES = {};
-let pdfToPngFn = null;
-function plansPdf() {
-  const dir = path.join(LDIR, 'plans');
-  if (!fs.existsSync(dir)) return null;
-  const pdfs = fs.readdirSync(dir).filter(f => /\.pdf$/i.test(f));
-  const f = d.plansFile && pdfs.includes(d.plansFile) ? d.plansFile : pdfs[0];
-  return f ? path.join(dir, f) : null;
-}
-async function planPage(n) {
-  if (PAGES[n]) return PAGES[n];
-  if (!pdfToPngFn) ({ pdfToPng: pdfToPngFn } = await import('pdf-to-png-converter'));
-  const [pg] = await pdfToPngFn(plansPdf(), { viewportScale: 4, pagesToProcess: [n] });
-  if (!pg) throw new Error(`plans: page ${n} not found in ${plansPdf()}`);
-  return (PAGES[n] = await sharp(pg.content).flatten({ background: '#ffffff' }).removeAlpha().raw().toBuffer({ resolveWithObject: true }));
-}
-async function cropPage(n, [l, t, w, h]) {
-  const { data, info } = await planPage(n);
-  const box = { left: Math.round(l * info.width), top: Math.round(t * info.height), width: Math.round(w * info.width), height: Math.round(h * info.height) };
-  box.width = Math.min(box.width, info.width - box.left); box.height = Math.min(box.height, info.height - box.top);
-  const { data: px, info: ci } = await sharp(data, { raw: { width: info.width, height: info.height, channels: info.channels } }).extract(box).raw().toBuffer({ resolveWithObject: true });
-  return { px, W: ci.width, H: ci.height, ch: ci.channels };
-}
-// darkness from the max channel, not luminance: the orange highlighter has a high max channel (red ≈ 240) and drops to ~0,
-// while pen and print lines are dark in every channel and survive
-const darkness = (px, i) => Math.max(0, (255 - Math.max(px[i], px[i + 1], px[i + 2]) - 10) / 245);
-
-/* ------------------------------------------------------------------ THE CORNER: the floor plan of the apartment (window map) */
-let CORNER = null;   // { src, w, h, rects: [[x', y', w', h'] in % of the padded png] }
-async function processCorner() {
-  const c = d.corner;
-  if (!c || !(c.items || []).length) return;
-  if (!plansPdf()) { console.warn('corner: no plans PDF, section skipped'); return; }
-  const { px, W, H, ch } = await cropPage(c.page || 1, c.crop || [0, 0, 1, 1]);
-  const rgb = hexRgb(ACCENT), rgba = Buffer.alloc(W * H * 4);
-  for (let p = 0; p < W * H; p++) {
-    const a = Math.min(0.92, Math.pow(darkness(px, p * ch), 0.5));
-    rgba[p * 4] = rgb[0]; rgba[p * 4 + 1] = rgb[1]; rgba[p * 4 + 2] = rgb[2]; rgba[p * 4 + 3] = Math.round(a * 255);
-  }
-  const pad = Math.round(Math.max(W, H) * 0.02);
-  const outW = Math.min(2000, W + pad * 2);
-  const buf = await sharp(rgba, { raw: { width: W, height: H, channels: 4 } })
-    .extend({ top: pad, bottom: pad, left: pad, right: pad, background: { r: rgb[0], g: rgb[1], b: rgb[2], alpha: 0 } })
-    .resize(outW, null, { kernel: 'lanczos3' }).png({ compressionLevel: 9, palette: true, quality: 90 }).toBuffer();
-  const m = await sharp(buf).metadata();
-  fs.writeFileSync(path.join(OUT_IMG, 'corner-plan.png'), buf); hash.update(buf);
-  // rect [x, y, w, h] in % of the unpadded crop → % of the padded png
-  const PW = W + 2 * pad, PH = H + 2 * pad;
-  const rects = c.items.map(({ rect: [x, y, w, h] }) => [(pad + x / 100 * W) / PW * 100, (pad + y / 100 * H) / PH * 100, w / 100 * W / PW * 100, h / 100 * H / PH * 100]);
-  CORNER = { src: 'assets/img/corner-plan.png', w: m.width, h: m.height, rects };
-  console.log(`corner plan ${m.width}×${m.height}  ${(buf.length / 1024).toFixed(0)} KB  (crop ${W}×${H}, pad ${pad})`);
-  // debug overlay (not shipped): the padded crop in greyscale with every mapped rect stroked and numbered
+/* ------------------------------------------------------------------ THE ROOMS: the hand-traced vector plan, inlined */
+// Contract of the SVG: path.room[data-room] (clickable ones also .is-click), line.wall, line.win, line.win-cut, text.lbl[data-for],
+// text.dim[data-for]. The geometry is never changed; the build only adds attributes and drops inline styles (colours come from CSS).
+let ROOMSVG = null;
+async function processRoomsPlan() {
+  const r = d.rooms;
+  if (!r || !(r.items || []).length) return;
+  const file = path.join(LDIR, 'plans', r.plan || 'rovina8-plan.svg');
+  if (!fs.existsSync(file)) { console.warn(`rooms: ${file} missing, section skipped`); return; }
+  const src = fs.readFileSync(file, 'utf8').replace(/<\?xml[^>]*\?>\s*/, '').replace(/<!--[\s\S]*?-->/g, '').trim();
+  let svg = src.replace(/<svg\b([^>]*)>/, (m, a) => `<svg${a.replace(/\s(?:width|height)="[^"]*"/g, '')} class="rm-svg" role="img" aria-labelledby="rm-svg-t">`)
+    .replace(/<title>/, '<title id="rm-svg-t">')
+    .replace(/<path class="room/g, '<path aria-hidden="true" class="room')
+    .replace(/\sstyle="[^"]*"/g, '');
+  const ids = [...svg.matchAll(/class="room is-click" data-room="([^"]+)"/g)].map(m => m[1]);
+  const missing = r.items.filter(it => !ids.includes(it.id)).map(it => it.id);
+  if (missing.length) console.warn(`rooms: no clickable room in the SVG for ${missing.join(', ')}`);
+  ROOMSVG = svg;
+  // preview (not shipped): the plan on the green ground with the colours resolved
+  const vb = (src.match(/viewBox="([^"]+)"/) || [])[1].split(/\s+/);
+  const prev = src.replace(/var\(--plan-bg,\s*(#[0-9a-fA-F]+)\)/g, '$1')
+    .replace('</defs>', `</defs><rect x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" fill="${GROUND}"/>`);
   const dbg = path.join(LDIR, '_debug');
   fs.mkdirSync(dbg, { recursive: true });
-  const DW = 1400, DH = Math.round(DW * PH / PW), cols = ['#e6194b', '#3cb44b', '#4363d8', '#f58231'];
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${DW}" height="${DH}">${rects.map(([x, y, w, h], i) => {
-    const X = x / 100 * DW, Y = y / 100 * DH, w2 = w / 100 * DW, h2 = h / 100 * DH;
-    return `<rect x="${X.toFixed(1)}" y="${Y.toFixed(1)}" width="${w2.toFixed(1)}" height="${h2.toFixed(1)}" fill="${cols[i % 4]}" fill-opacity=".15" stroke="${cols[i % 4]}" stroke-width="3"/><text x="${(X + 6).toFixed(1)}" y="${(Y + 30).toFixed(1)}" font-family="Arial" font-size="28" font-weight="700" fill="${cols[i % 4]}">${esc(c.items[i].num)}</text>`;
-  }).join('')}</svg>`;
-  await sharp(px, { raw: { width: W, height: H, channels: ch } }).greyscale()
-    .extend({ top: pad, bottom: pad, left: pad, right: pad, background: '#ffffff' })
-    .resize(DW, DH).composite([{ input: Buffer.from(svg) }]).png().toFile(path.join(dbg, 'corner-overlay.png'));
+  await sharp(Buffer.from(prev)).resize(760).png().toFile(path.join(dbg, 'plan.png'));
+  console.log(`rooms plan inline ${(Buffer.byteLength(svg) / 1024).toFixed(1)} KB, clickable: ${ids.join(', ')}`);
 }
 
-/* ------------------------------------------------------------------ THE KEYS: what comes with the deal, on the scanned plans */
-// Ink in graphite; the agent's red pen box in solid copper (dilated 1px). On a page without a red box (the apartment on page 1)
-// the agent's orange highlighter outline is recoloured copper at 35%.
-const KEYS = {};   // id -> { src, w, h }
-async function processKeys() {
-  const k = d.keys;
-  if (!k || !(k.items || []).length) return;
-  if (!plansPdf()) { console.warn('keys: no plans PDF, section skipped'); return; }
-  const INK = hexRgb('#1F2326'), CU = hexRgb('#9A5530');
-  for (const it of k.items) {
-    const { px, W, H, ch } = await cropPage(it.page, it.crop);
-    const red = new Uint8Array(W * H), hi = new Uint8Array(W * H);
-    let nRed = 0;
-    for (let p = 0; p < W * H; p++) {
-      const r = px[p * ch], g = px[p * ch + 1], b = px[p * ch + 2];
-      if (r > 150 && g < 100 && b < 100) { red[p] = 1; nRed++; }
-      else if (r > 200 && r - b > 50 && g > 120) hi[p] = 1;
+/* ------------------------------------------------------------------ green theme motif: the façade's balcony slabs */
+// Long horizontal slabs (two lines 5 apart, square ends) from the right edge, rail posts hanging under some, a short return on a few.
+function writeSlabs() {
+  const R = rng(8), f = v => Math.round(v), d0 = [];
+  let y = 150 + R() * 60;
+  while (y < 2960) {
+    const len = 1000 * (0.38 + R() * 0.54), x0 = f(1000 - len), Y = f(y);
+    d0.push(`M1000 ${Y}H${x0}V${Y + 5}H1000`);
+    if (R() < 0.25) d0.push(`M${x0} ${Y + 5}V${Y + 45}`);
+    const next = y + 300 + (R() - 0.5) * 60;
+    if (R() < 0.6) {
+      const span = len * (0.2 + R() * 0.15), h = f(70 + R() * 20), x1 = f(x0 + span);
+      let posts = '';
+      for (let x = x0 + 7; x <= x1; x += 14) posts += `M${f(x)} ${Y + 5}v${h}`;
+      d0.push(posts + `M${x0} ${Y + 5 + h}H${x1}`);
     }
-    const useRed = nRed > 200;
-    const mark = new Uint8Array(W * H);
-    if (useRed) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      if (!red[y * W + x]) continue;
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        const X = x + dx, Y = y + dy;
-        if (X >= 0 && Y >= 0 && X < W && Y < H) mark[Y * W + X] = 1;
-      }
-    }
-    const rgba = Buffer.alloc(W * H * 4);
-    for (let p = 0; p < W * H; p++) {
-      let c = INK, a;
-      if (mark[p]) { c = CU; a = 1; }
-      else if (!useRed && hi[p]) { c = CU; a = 0.35; }
-      else { const dk = darkness(px, p * ch); a = dk < 0.12 ? 0 : Math.min(0.75, Math.pow(dk, 0.6)); }
-      rgba[p * 4] = c[0]; rgba[p * 4 + 1] = c[1]; rgba[p * 4 + 2] = c[2]; rgba[p * 4 + 3] = Math.round(a * 255);
-    }
-    const pad = Math.round(Math.max(W, H) * 0.02);
-    const buf = await sharp(rgba, { raw: { width: W, height: H, channels: 4 } })
-      .extend({ top: pad, bottom: pad, left: pad, right: pad, background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .resize(Math.min(1400, W + 2 * pad), null, { kernel: 'lanczos3' }).png({ compressionLevel: 9, palette: true, quality: 90 }).toBuffer();
-    const m = await sharp(buf).metadata();
-    const name = `key-${it.id}.png`;
-    fs.writeFileSync(path.join(OUT_IMG, name), buf); hash.update(buf);
-    KEYS[it.id] = { src: `assets/img/${name}`, w: m.width, h: m.height };
-    console.log(`key   ${it.id.padEnd(8)} p${it.page}  ${m.width}×${m.height}  ${(buf.length / 1024).toFixed(0)} KB  mark: ${useRed ? `red pen (${nRed} px)` : 'highlighter'}`);
+    y = next;
   }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 3000" preserveAspectRatio="xMaxYMin slice"><path d="${d0.join('')}" fill="none" stroke="${ACCENT}" stroke-width="1" vector-effect="non-scaling-stroke" shape-rendering="geometricPrecision"/></svg>`;
+  fs.writeFileSync(path.join(OUT_IMG, 'slabs.svg'), svg);
+  hash.update(svg);
+  console.log(`slabs.svg ${(svg.length / 1024).toFixed(1)} KB`);
 }
-
 /* ------------------------------------------------------------------ corner theme motif: light rays from the corner */
 // straight lines fanning down-left from one point just outside the top-right corner (the RTL "start" corner)
 const rayLines = (ox, oy, n, a0, a1, len) => Array.from({ length: n }, (_, i) => {
@@ -440,6 +379,7 @@ const WA_ICON = '<svg class="wa" viewBox="0 0 24 24" aria-hidden="true"><path d=
 /* ------------------------------------------------------------------ sections */
 function sections() {
   const S = {}, L = d.labels || {}, M = d.menu || {};
+  const SHUT = THEME === 'green';   // the hero opens with a shutter (תריס) inside its frame
   const H = d.hero || {};
   const dot = '<i class="dot" aria-hidden="true"></i>';
 
@@ -490,7 +430,7 @@ function sections() {
   <script type="application/json" id="film-data">${JSON.stringify({ captions: fs_.map(cap), seconds: F.seconds || 4, fade: F.fade || 0.9 })}</script>
 </section>`;
   } else S.hero = `
-<section class="hero${THEME === 'corner' ? ' hero-par' : ''}" id="hero" aria-label="${esc(d.title)}">
+<section class="hero${THEME === 'corner' || THEME === 'green' ? ' hero-par' : ''}${SHUT ? ' hero-shut' : ''}" id="hero" aria-label="${esc(d.title)}">
   <div class="hero-head">
     <p class="hero-label label-en" lang="en">${esc(d.latinTitle || `${d.type} · ${d.area}`)}</p>
     <h1 class="hero-title">${nums(d.title)}</h1>
@@ -499,50 +439,66 @@ function sections() {
     <i class="hero-rule" aria-hidden="true"></i>
   </div>
   <div class="hero-photo">
-    ${frame(img(K.hero, { eager: true, cls: 'hero-img', sizes: '(min-width: 900px) 60vw, calc(100vw - 48px)' }), { cls: 'hero-frame', reveal: false })}
+    ${frame(img(K.hero, { eager: true, cls: 'hero-img', sizes: '(min-width: 900px) 60vw, calc(100vw - 48px)' }) + (SHUT ? `<i class="hero-louvre" aria-hidden="true"></i>
+      <div class="shutter" aria-hidden="true"><div class="sh-slats">${'<i></i>'.repeat(14)}</div></div>
+      <i class="sh-box" aria-hidden="true"></i>` : ''), { cls: 'hero-frame', reveal: false })}
     ${H.caption ? `<p class="chip hero-chip" lang="en">${esc(H.caption.split('·')[0].trim())}<span lang="he"> · ${esc((H.caption.split('·')[1] || '').trim())}</span></p>` : ''}
   </div>
   <div class="hero-bottom">
-    ${d.corner && CORNER ? `<a class="hero-tour" href="#corner">${esc(H.tour || 'לסיור בדירה')} <span aria-hidden="true">↓</span></a>`
+    ${ROOMSVG ? `<a class="hero-tour" href="#rooms">${esc(H.tour || 'לסיור בדירה')} <span aria-hidden="true">↓</span></a>`
       : K.sig ? `<a class="hero-tour" href="#house">${esc(H.tour || 'לסיור בבית')} <span aria-hidden="true">↓</span></a>` : '<span></span>'}
     ${H.note ? `<p class="hero-note">${esc(H.note)}</p>` : ''}
   </div>
 </section>`;
 
-  /* THE CORNER: the real plan of the apartment + the view from each opening. Buttons are the only way to switch. */
-  const C = d.corner;
-  const pc = v => v.toFixed(3);
-  // the spotlight cut-out is a mask layer of size s% placed at x%; CSS mask-position % means x / (100 - s)
-  const mpos = (x, s) => (s >= 100 ? 0 : x / (100 - s) * 100);
-  const cnVars = i => { const [x, y, w, h] = CORNER.rects[i]; return `--mp:${pc(mpos(x, w))}% ${pc(mpos(y, h))}%;--ms:${pc(w)}% ${pc(h)}%`; };
-  const cnCap = it => `<p class="label-en cn-en" lang="en">${esc(it.latin)}</p>
-        <p class="cn-he">${esc(it.he)} <span class="cn-facing">· ${esc(it.facing)}</span></p>
-        <p class="cn-line">${nums(it.line)}</p>`;
-  S.corner = C && CORNER && K.corner.length ? `
-<section class="corner" id="corner" aria-label="דירה בפינה">
-  ${head(L.corner, C.title)}
-  <div class="cn-body">
-    <div class="cn-stage">
-      ${frame(`<div class="cn-draw" style="${cnVars(0)}">
-          <span class="cn-ink" data-mask="${CORNER.src}"></span>
-          <span class="cn-dim" aria-hidden="true"></span>
-          ${C.items.map((it, i) => { const [x, y, w, h] = CORNER.rects[i]; return `<i class="cn-hit${i === 0 ? ' is-on' : ''}" data-i="${i}" data-v="${cnVars(i)}" style="left:${pc(x)}%;top:${pc(y)}%;width:${pc(w)}%;height:${pc(h)}%" aria-hidden="true"></i>`; }).join('\n          ')}
-          ${C.north ? '<span class="cn-north" aria-hidden="true"><b lang="en">N</b><i></i></span>' : ''}
-        </div>`, { cls: 'cn-plan', style: `aspect-ratio:${CORNER.w} / ${CORNER.h}` })}
-      <figure class="cn-view" id="cn-view" role="tabpanel" aria-labelledby="cn-tab-0">
-        ${frame(C.items.map((it, i) => `<div class="cn-ph${i === 0 ? ' is-on' : ''}" data-i="${i}">${img(K.corner[i], { sizes: '(min-width: 900px) 52vw, calc(100vw - 68px)' })}</div>`).join(''), { cls: 'cn-frame' })}
-        <figcaption class="cn-cap" aria-live="polite">
-        ${cnCap(C.items[0])}
+  /* THE ROOMS: the inline vector plan (sticky on desktop, CSS only) + one viewer that steps through each room's photos */
+  const RM = d.rooms;
+  const rmShort = it => (String(it.dims || '').match(/\d+(?:\.\d+)?(?:\s*×\s*\d+(?:\.\d+)?)?/) || [''])[0];
+  const rmCap = it => `<p class="label-en" lang="en">${esc(it.latin)}</p>
+          <p class="rm-he">${esc(it.he)}${it.dims ? ` <span class="rm-dims">· ${nums(it.dims)}</span>` : ''}</p>
+          ${it.line ? `<p class="rm-line">${nums(it.line)}</p>` : ''}`;
+  const rmPhotos = ROOMSVG ? RM.items.flatMap((it, i) => K.rooms[i].map((k, j) => ({ k, i, j, id: it.id }))) : [];
+  const vbox = ROOMSVG ? (ROOMSVG.match(/viewBox="([^"]+)"/) || [])[1].split(/\s+/).map(Number) : [];
+  S.rooms = ROOMSVG && rmPhotos.length ? `
+<section class="rooms" id="rooms" aria-label="חדר אחרי חדר">
+  ${head(L.rooms, RM.title)}
+  <div class="rm-body">
+    <div class="rm-plan">${frame(ROOMSVG, { cls: 'rm-frame', style: `aspect-ratio:${vbox[2]} / ${vbox[3]}` })}</div>
+    <div class="rm-side">
+      ${RM.hint ? `<p class="rm-hint">${esc(RM.hint)}</p>` : ''}
+      <div class="rm-btns" role="tablist" aria-label="חדרי הדירה">
+        ${RM.items.map((it, i) => `<button class="rm-btn" type="button" role="tab" id="rm-tab-${i}" aria-controls="rm-view" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-room="${esc(it.id)}"${gc('room-' + it.id)}><span class="rm-bn">${esc(it.he)}</span>${rmShort(it) ? `<span class="rm-bd num" dir="ltr">${esc(rmShort(it))}</span>` : ''}</button>`).join('\n        ')}
+      </div>
+      <figure class="rm-view" id="rm-view" role="tabpanel" aria-labelledby="rm-tab-0">
+        ${frame(rmPhotos.map(p => {
+          // only the first photo loads with the section; a room's other photos load when that room is shown (data-dsrc)
+          const im = img(p.k, { sizes: '(min-width: 900px) 50vw, calc(100vw - 68px)' });
+          return `<div class="rm-ph${p.i === 0 && p.j === 0 ? ' is-on' : ''}" data-room="${esc(p.id)}" data-k="${p.j}">${p.i === 0 && p.j === 0 ? im : im.replace(' data-src=', ' data-dsrc=').replace(' data-srcset=', ' data-dsrcset=')}</div>`;
+        }).join('') + '<button class="rm-open" type="button" aria-label="לצפייה במסך מלא"></button>', { cls: 'rm-frame-ph' })}
+        <div class="rm-step" dir="ltr"${K.rooms[0].length > 1 ? '' : ' hidden'}>
+          <button class="rm-prev" type="button" aria-label="התמונה הקודמת">${L_ARR}</button>
+          <span class="rm-count num"><b>01</b> / ${pad2(K.rooms[0].length)}</span>
+          <button class="rm-next" type="button" aria-label="התמונה הבאה">${R_ARR}</button>
+        </div>
+        <figcaption class="rm-cap" aria-live="polite">
+          ${rmCap(RM.items[0])}
         </figcaption>
       </figure>
     </div>
-    ${C.hint ? `<p class="cn-hint">${esc(C.hint)}</p>` : ''}
-    <div class="cn-btns" role="tablist" aria-label="חלונות הדירה">
-      ${C.items.map((it, i) => `<button class="cn-btn" type="button" role="tab" id="cn-tab-${i}" aria-selected="${i === 0}" aria-controls="cn-view" tabindex="${i === 0 ? 0 : -1}" data-i="${i}"${gc('corner-' + it.id)}><b class="num" dir="ltr">${esc(it.num)}</b><span>${esc(it.he)}</span></button>`).join('\n      ')}
-    </div>
-    ${C.planNote ? `<p class="cn-note">${nums(C.planNote)}</p>` : ''}
   </div>
-  <script type="application/json" id="corner-data">${JSON.stringify(C.items.map(cnCap)).replace(/</g, '\\u003c')}</script>
+  ${RM.note ? `<p class="rm-note">${nums(RM.note)}</p>` : ''}
+  <script type="application/json" id="rooms-data">${JSON.stringify(RM.items.map((it, i) => ({ id: it.id, cap: rmCap(it), photos: K.rooms[i].map(k => ({ src: IMG[k].src[2000] || IMG[k].src[1000], alt: altOf(k), w: IMG[k].w, h: IMG[k].h })) }))).replace(/</g, '\\u003c')}</script>
+</section>` : '';
+
+  /* THE BALCONY: one wide photo that pans with the scroll inside its frame (not pinned), then a pair */
+  const BC = d.balcony;
+  S.balcony = BC && K.bcPan ? `
+<section class="balcony" id="balcony" aria-label="המרפסת">
+  ${head(L.balcony, BC.title)}
+  ${frame(img(K.bcPan, { cls: 'bc-pan', sizes: '(min-width: 900px) 1500px, 200vw' }), { cls: 'bc-frame' })}
+  <div class="bc-under" aria-hidden="true"><p class="bc-look" lang="en">LOOK AROUND</p><i class="bc-track"><b></b></i></div>
+  ${BC.line ? `<p class="bc-line" data-fade>${nums(BC.line)}</p>` : ''}
+  ${K.bcPair.length ? `<div class="bc-pair">${K.bcPair.map(k => frame(img(k, { sizes: '(min-width: 900px) 44vw, calc(50vw - 40px)' }), { cls: 'bc-pf' })).join('')}</div>` : ''}
 </section>` : '';
 
   /* signature (full-bleed, pinned) */
@@ -641,11 +597,24 @@ function sections() {
   </div>
 </div>` : '';
 
+  /* what comes with the apartment: line icons on a 24 grid, drawn in once (not buttons, not links) */
+  const ICON = {
+    parking: '<rect x="3.5" y="3.5" width="17" height="17" rx="3.5"/><path d="M9.5 17.5v-11"/><path d="M9.5 6.5h3.4a3.1 3.1 0 0 1 0 6.2H9.5"/>',
+    storage: '<path d="M3.5 4.5h17v4h-17z"/><path d="M5 8.5v11.5h14V8.5"/><path d="M10 12.5h4"/>',
+    mamad: '<rect x="4" y="3.5" width="16" height="17"/><rect x="7.5" y="7" width="9" height="10" stroke-width="2.2"/><circle cx="12" cy="12" r="1.9"/>',
+    lift: '<rect x="5" y="8" width="14" height="12.5"/><path d="M12 8v12.5"/><path d="M8.5 5.2L10 3.7l1.5 1.5"/><path d="M12.5 3.7l1.5 1.5 1.5-1.5"/>',
+  };
+  const IN = d.included;
+  const INCL = IN && has(IN.items) ? `<div class="incl">
+    ${IN.label ? `<p class="incl-label" data-fade>${esc(IN.label)}</p>` : ''}
+    <ul class="incl-list">${IN.items.map(it => `<li class="incl-item">${ICON[it.id] ? `<svg class="incl-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICON[it.id].replace(/\/>/g, ' pathLength="1"/>')}</svg>` : ''}<span>${nums(it.he)}</span></li>`).join('')}</ul>
+  </div>` : '';
+
   /* price + facts: the number, the line, then the house in numbers (one section on the light ground) */
   const facts = (d.facts || []).filter(f => f.value);
   S.price = d.price != null ? `
 <section class="price" id="price" aria-label="מחיר מבוקש">
-  ${THEME === 'corner' ? priceRays() : LIGHT ? '<div class="price-grid" aria-hidden="true"><i class="pg-h"></i><i class="pg-v"></i></div>' : priceRings()}
+  ${THEME === 'green' ? '<i class="price-slabs" aria-hidden="true"></i>' : THEME === 'corner' ? priceRays() : LIGHT ? '<div class="price-grid" aria-hidden="true"><i class="pg-h"></i><i class="pg-v"></i></div>' : priceRings()}
   ${head(L.price, '', { cls: 'sh-c', titleHtml: `<p class="price-num" dir="ltr"><span class="visually-hidden">${fmtPrice(d.price)}</span><span class="pd-roll" aria-hidden="true">${[...fmtPrice(d.price)].map(ch => /\d/.test(ch)
       ? `<span class="pd" data-d="${ch}"><span class="pd-col">${Array.from({ length: 20 }, (_, k) => `<span>${k % 10}</span>`).join('')}</span></span>`
       : `<span class="pc${ch === '₪' ? ' cur' : ''}">${ch}</span>`).join('')}</span></p>` })}
@@ -656,26 +625,8 @@ function sections() {
       <dd class="fact-val"><span class="fact-num num" data-count="${esc(f.value)}" dir="ltr">${esc(f.value)}</span>${f.unit ? `<span class="fact-unit">${esc(f.unit)}</span>` : ''}</dd>
     </div>`).join('\n    ')}
   </dl>` : ''}
+  ${INCL}
   ${has(d.extras) ? `<p class="extras" data-fade>${d.extras.map(e => `<span class="nw">${nums(e)}</span>`).join('<i class="dot" aria-hidden="true"></i>')}</p>` : ''}
-</section>` : '';
-
-  /* THE KEYS: the apartment, the parking spaces and the storage room, each on its crop of the scanned plan */
-  const KY = d.keys, kyItems = KY ? (KY.items || []).filter(it => KEYS[it.id]) : [];
-  const keyIcon = num => `<svg class="ky-icon" viewBox="0 0 132 52" aria-hidden="true" focusable="false"><circle class="ky-ring" cx="26" cy="26" r="20"/><text class="ky-num" x="26" y="27" text-anchor="middle" dominant-baseline="middle">${esc(num)}</text><path class="ky-shaft" d="M46 26.4C70 25.6 96 26.6 126 25.8M104 26.2l.6 11.2M116 26l-.4 8.4"/></svg>`;
-  S.keys = kyItems.length ? `
-<section class="keys" id="keys" aria-label="${esc(KY.title || 'מה מקבלים עם הדירה')}">
-  ${head(L.keys, KY.title)}
-  ${KY.hint ? `<p class="ky-hint">${esc(KY.hint)}</p>` : ''}
-  <div class="ky-btns" role="tablist" aria-label="מה מקבלים עם הדירה">
-    ${kyItems.map((it, i) => `<button class="ky-btn" type="button" role="tab" id="ky-tab-${i}" aria-selected="${i === 0}" aria-controls="ky-view" tabindex="${i === 0 ? 0 : -1}" data-i="${i}"${gc('key-' + it.id)}>${keyIcon(it.num)}<span class="ky-he">${esc(it.he)}</span><span class="ky-sub">${nums(it.sub)}</span></button>`).join('\n    ')}
-  </div>
-  <figure class="ky-view" id="ky-view" role="tabpanel" aria-labelledby="ky-tab-0">
-    ${frame(kyItems.map((it, i) => `<img class="ky-img${i === 0 ? ' is-on' : ''}" data-i="${i}" data-src="${KEYS[it.id].src}" width="${KEYS[it.id].w}" height="${KEYS[it.id].h}" alt="תשריט: ${esc(it.he)}, ${esc(it.sub)}" decoding="async">`).join(''), { cls: 'ky-frame', style: `--ar:${KEYS[kyItems[0].id].w} / ${KEYS[kyItems[0].id].h};--arn:${(KEYS[kyItems[0].id].w / KEYS[kyItems[0].id].h).toFixed(4)}` })}
-    <figcaption class="ky-cap" aria-live="polite">${nums(`${kyItems[0].he} · ${kyItems[0].sub}`)}</figcaption>
-  </figure>
-  <p class="ky-note">תשריט סרוק מהיתר הבנייה. להמחשה בלבד.</p>
-  ${has(KY.extras) ? `<p class="extras ky-extras" data-fade>${KY.extras.map(e => `<span class="nw">${nums(e)}</span>`).join('<i class="dot" aria-hidden="true"></i>')}</p>` : ''}
-  <script type="application/json" id="keys-data">${JSON.stringify(kyItems.map(it => ({ cap: nums(`${it.he} · ${it.sub}`), ar: `${KEYS[it.id].w} / ${KEYS[it.id].h}`, arn: (KEYS[it.id].w / KEYS[it.id].h).toFixed(4) })))}</script>
 </section>` : '';
 
   /* gallery */
@@ -683,20 +634,24 @@ function sections() {
   S.gallery = gal.length ? `
 <section class="gallery" id="gallery" aria-label="כל התמונות">
   <div class="gal-head">${head(L.gallery, 'כל התמונות')}</div>
-  <div class="cf">
-    <div class="cf-track" dir="ltr" tabindex="0" aria-roledescription="carousel" aria-label="גלריה, החליקו לצדדים">
-      ${gal.map((k, i) => `<div class="cf-slide${i === 0 ? ' is-on' : ''}" data-i="${i}"><button class="cf-card" type="button" aria-label="${esc(GI[i].he)}: ${alt(k)}">${frame(img(k, { sizes: '(min-width: 900px) 46vw, 72vw' }) + '<span class="cf-dim"></span>', { reveal: false })}</button></div>`).join('\n      ')}
+  <div class="deck" tabindex="0" aria-roledescription="carousel" aria-label="גלריה. החליקו או השתמשו בחצים">
+    <div class="dk-stack">
+      ${gal.map((k, i) => {
+        // a seeded tilt per print, never close to straight: ±[0.8°, 3.5°]
+        const R = rng(101 + i * 7), tilt = (R() < 0.5 ? -1 : 1) * (0.8 + R() * 2.7);
+        // the top 4 load with the section; the rest load as the deck moves (data-dsrc, not picked up by the section loader)
+        const im = img(k, { sizes: '(min-width: 900px) 900px, calc(100vw - 48px)' });
+        return `<figure class="dk-card" data-i="${i}" style="--r:${tilt.toFixed(2)}deg">${frame(i < 4 ? im : im.replace(' data-src=', ' data-dsrc=').replace(' data-srcset=', ' data-dsrcset='), { reveal: false })}</figure>`;
+      }).join('\n      ')}
     </div>
-    <button class="cf-arrow cf-prev" type="button" aria-label="התמונה הקודמת">${L_ARR}</button>
-    <button class="cf-arrow cf-next" type="button" aria-label="התמונה הבאה">${R_ARR}</button>
   </div>
-  <div class="cf-meta">
-    <div class="cf-cap"><p class="cf-en label-en" lang="en">${esc(GI[0].latin)}</p><p class="cf-he">${esc(GI[0].he)}</p></div>
-    <p class="cf-count" dir="ltr"><b class="cf-now">01</b><span class="cf-of"> / ${pad2(gal.length)}</span></p>
+  <div class="dk-meta">
+    <button class="dk-prev" type="button" aria-label="התמונה הקודמת"${gc('gallery-prev')}>${R_ARR}</button>
+    <div class="dk-cap" aria-live="polite"><p class="label-en" lang="en">${esc(GI[0].latin)}</p><p class="dk-he">${esc(GI[0].he)}</p></div>
+    <p class="dk-count num" dir="ltr"><b>01</b> / ${pad2(gal.length)}</p>
+    <button class="dk-next" type="button" aria-label="התמונה הבאה"${gc('gallery-next')}>${L_ARR}</button>
   </div>
-  <div class="cf-bar" dir="ltr">
-    ${gal.map((k, i) => `<button class="cf-seg${i === 0 ? ' is-on' : ''}" type="button" data-i="${i}" aria-label="תמונה ${i + 1} מתוך ${gal.length}"><i></i></button>`).join('')}
-  </div>
+  <p class="dk-hint">החליקו את התמונה, או לחצו עליה למסך מלא</p>
 </section>
 <script type="application/json" id="gallery-data">${JSON.stringify(gal.map((k, i) => ({ src: IMG[k].src[2000] || IMG[k].src[1000], alt: altOf(k), w: IMG[k].w, h: IMG[k].h, latin: GI[i].latin || '', he: GI[i].he || '' })))}</script>` : '';
   S.lightbox = `<div class="lightbox" role="dialog" aria-modal="true" aria-label="תצוגה במסך מלא" hidden>
@@ -761,7 +716,7 @@ function sections() {
 </footer>`;
 
   /* menu: one link per section that exists */
-  const target = { corner: ['#corner', S.corner], keys: ['#keys', S.keys], house: ['#house', S.house || S.sig], gardens: ['#gardens', S.gardens], floors: ['#floors', S.floors], imagine: ['#imagine', S.imagine], price: ['#price', S.price],
+  const target = { rooms: ['#rooms', S.rooms], balcony: ['#balcony', S.balcony], house: ['#house', S.house || S.sig], gardens: ['#gardens', S.gardens], floors: ['#floors', S.floors], imagine: ['#imagine', S.imagine], price: ['#price', S.price],
     gallery: ['#gallery', S.gallery], visit: ['#visit', S.visit] };
   const order = d.menuOrder || Object.keys(target);
   const items = order.filter(k => target[k] && target[k][1] && L[k] && M[k]);
@@ -813,7 +768,7 @@ function writeSubPages(ver) {
     <li>ניגודיות צבעים של 4.5:1 לפחות בטקסט, ואזורי לחיצה בגודל 44 פיקסלים לפחות.</li>
     <li>מי שהגדיר במכשיר "הפחתת תנועה" יקבל את האתר ללא אנימציות.</li>
     ${STAGE ? '<li>השוואת הצילום וההדמיה נשלטת גם במקשי החצים.</li>' : ''}
-    ${CORNER || Object.keys(KEYS).length ? '<li>בחירת החלונות והמפתחות נשלטת גם במקלדת, בחיצים וב־Enter.</li>' : ''}
+    ${ROOMSVG ? '<li>בחירת החדרים בתוכנית ודפדוף בגלריה נשלטים גם במקלדת, בחיצים וב־Enter.</li>' : ''}
   </ul>
   <h2>נתקלתם בבעיה?</h2>
   <p>אם משהו באתר לא נגיש לכם, נשמח לשמוע ולתקן. אפשר לפנות אל:<br>${contact}</p>
@@ -842,11 +797,11 @@ function writeSubPages(ver) {
 await processPhotos();
 await processPlans();
 await processStaging();
-await processCorner();
-await processKeys();
-// both motif files are always written (a few KB each): the shared stylesheet references them per theme, and every url() in it must resolve
-writeRings();
-writeRays();
+await processRoomsPlan();
+// one motif per theme (processPhotos cleared assets/img, so other themes' motif files are not shipped)
+if (THEME === 'dark') writeRings();
+if (THEME === 'corner') writeRays();
+if (THEME === 'green') writeSlabs();
 const S = sections();
 const ver = hash.update(fs.readFileSync(path.join(ROOT, 'template', 'styles.css'))).update(fs.readFileSync(path.join(ROOT, 'template', 'main.js'))).digest('hex').slice(0, 8);
 const pageTitle = d.pageTitle || `${d.title} · ${d.type}${d.isNew ? ' חדש' : ''} ב${d.area}`;
@@ -873,4 +828,4 @@ fs.copyFileSync(path.join(ROOT, 'template', 'styles.css'), path.join(ROOT, 'asse
 fs.copyFileSync(path.join(ROOT, 'template', 'main.js'), path.join(ROOT, 'assets', 'js', 'main.js'));
 const fav = fs.readFileSync(path.join(ROOT, 'template', 'favicon.svg'), 'utf8').replace(/\{\{mono\}\}/g, esc(d.houseNumber || d.title.slice(0, 2))).replace(/\{\{accent\}\}/g, ACCENT).replace(/\{\{ground\}\}/g, GROUND);
 fs.writeFileSync(path.join(ROOT, 'favicon.svg'), fav);
-console.log(`built ${slug}: ${THEME} theme, ${INTRO} intro, ${jobs.size} photos, ${Object.keys(PLAN).length} plans, corner ${CORNER ? 'on' : 'off'}, keys ${Object.keys(KEYS).length}, staging ${STAGE ? 'on' : 'off'} (v ${ver})`);
+console.log(`built ${slug}: ${THEME} theme, ${INTRO} intro, ${jobs.size} photos, ${Object.keys(PLAN).length} plans, rooms ${ROOMSVG ? 'on' : 'off'}, balcony ${S.balcony ? 'on' : 'off'}, staging ${STAGE ? 'on' : 'off'} (v ${ver})`);

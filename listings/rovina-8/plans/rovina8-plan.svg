@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="20 30 960 1290" width="960" height="1290" font-family="Heebo, sans-serif" direction="rtl">
+<title>תוכנית דירה 07, קומה 3. שרטוט להמחשה לפי תוכנית ההיתר.</title>
+<defs><pattern id="hatch" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="14" stroke="#C98A5E" stroke-width="1" opacity=".35"/></pattern></defs>
+<path class="room is-click" data-room="living" d="M430,205 L960,205 L960,575 L775,575 L775,805 L615,805 L615,745 L430,745 Z" fill="transparent"/>
+<path class="room is-click" data-room="balcony" d="M200,60 L430,60 L430,385 L200,385 Z" fill="url(#hatch)"/>
+<path class="room is-click" data-room="master" d="M195,385 L420,385 L420,725 L195,725 Z" fill="transparent"/>
+<path class="room" data-room="mbath" d="M50,295 L195,295 L195,555 L50,555 Z" fill="transparent"/>
+<path class="room" data-room="laundry" d="M50,555 L195,555 L195,725 L50,725 Z" fill="transparent"/>
+<path class="room is-click" data-room="bath" d="M50,725 L290,725 L290,895 L50,895 Z" fill="transparent"/>
+<path class="room is-click" data-room="bed2" d="M50,895 L360,895 L360,1135 L50,1135 Z" fill="transparent"/>
+<path class="room" data-room="bed3" d="M360,810 L615,810 L615,1135 L360,1135 Z" fill="transparent"/>
+<path class="room" data-room="mamad" d="M615,960 L850,960 L850,1300 L615,1300 Z" fill="transparent"/>
+<path class="room" data-room="wc" d="M615,805 L775,805 L775,960 L615,960 Z" fill="transparent"/>
+<polyline points="200,385 200,60 430,60 430,205" fill="none" stroke="#C98A5E" stroke-width="2.5" stroke-dasharray="1 0"/>
+<line class="wall" x1="50" y1="295" x2="50" y2="1135" stroke="#C98A5E" stroke-width="9" stroke-linecap="square"/>
+<line class="wall" x1="50" y1="1135" x2="615" y2="1135" stroke="#C98A5E" stroke-width="9" stroke-linecap="square"/>
+<line class="wall" x1="50" y1="295" x2="200" y2="295" stroke="#C98A5E" stroke-width="9" stroke-linecap="square"/>
+<line class="wall" x1="200" y1="295" x2="200" y2="385" stroke="#C98A5E" stroke-width="9" stroke-linecap="square"/>
+<line class="wall" x1="200" y1="385" x2="430" y2="385" stroke="#C98A5E" stroke-width="9" stroke-linecap="square"/>
+<line class="wall" x1="430" y1="205" x2="430" y2="385" stroke="#C98A5E" stroke-width="9" stroke-linecap="square"/>
+<line class="wall" x1="960" y1="205" x2="960" y2="575" stroke="#C98A5E" stroke-width="9" stroke-linecap="square"/>
+<line class="wall" x1="775" y1="575" x2="960" y2="575" stroke="#C98A5E" stroke-width="9" stroke-linecap="square"/>
+<line class="wall" x1="782" y1="575" x2="782" y2="625" stroke="#C98A5E" stroke-width="18" stroke-linecap="square"/>
+<line class="wall" x1="782" y1="735" x2="782" y2="960" stroke="#C98A5E" stroke-width="18" stroke-linecap="square"/>
+<line class="wall" x1="615" y1="960" x2="850" y2="960" stroke="#C98A5E" stroke-width="14" stroke-linecap="square"/>
+<line class="wall" x1="615" y1="960" x2="615" y2="1300" stroke="#C98A5E" stroke-width="14" stroke-linecap="square"/>
+<line class="wall" x1="850" y1="960" x2="850" y2="1300" stroke="#C98A5E" stroke-width="14" stroke-linecap="square"/>
+<line class="wall" x1="615" y1="1300" x2="850" y2="1300" stroke="#C98A5E" stroke-width="14" stroke-linecap="square"/>
+<line class="wall" x1="195" y1="385" x2="195" y2="720" stroke="#C98A5E" stroke-width="4.5" stroke-linecap="square"/>
+<line class="wall" x1="50" y1="555" x2="195" y2="555" stroke="#C98A5E" stroke-width="4.5" stroke-linecap="square"/>
+<line class="wall" x1="50" y1="725" x2="290" y2="725" stroke="#C98A5E" stroke-width="4.5" stroke-linecap="square"/>
+<line class="wall" x1="200" y1="725" x2="300" y2="725" stroke="#C98A5E" stroke-width="4.5" stroke-linecap="square"/>
+<line class="wall" x1="420" y1="385" x2="420" y2="700" stroke="#C98A5E" stroke-width="4.5" stroke-linecap="square"/>
+<line class="wall" x1="290" y1="725" x2="290" y2="895" stroke="#C98A5E" stroke-width="4.5" stroke-linecap="square"/>
+<line class="wall" x1="50" y1="895" x2="290" y2="895" stroke="#C98A5E" stroke-width="4.5" stroke-linecap="square"/>
+<line class="wall" x1="290" y1="895" x2="360" y2="895" stroke="#C98A5E" stroke-width="4.5" stroke-linecap="square"/>
+<line class="wall" x1="360" y1="860" x2="360" y2="1135" stroke="#C98A5E" stroke-width="4.5" stroke-linecap="square"/>
+<line class="wall" x1="360" y1="810" x2="615" y2="810" stroke="#C98A5E" stroke-width="4.5" stroke-linecap="square"/>
+<line class="wall" x1="615" y1="745" x2="615" y2="960" stroke="#C98A5E" stroke-width="4.5" stroke-linecap="square"/>
+<line class="wall" x1="430" y1="745" x2="615" y2="745" stroke="#C98A5E" stroke-width="4.5" stroke-linecap="square"/>
+<line class="wall" x1="615" y1="805" x2="782" y2="805" stroke="#C98A5E" stroke-width="4.5" stroke-linecap="square"/>
+<line class="win-cut" x1="445" y1="205" x2="945" y2="205" style="stroke:var(--plan-bg, #1F2622)" stroke-width="10"/>
+<line x1="445" y1="202" x2="945" y2="202" stroke="#EEF0EC" stroke-width="1.2" class="win"/>
+<line x1="445" y1="208" x2="945" y2="208" stroke="#EEF0EC" stroke-width="1.2" class="win"/>
+<line class="win-cut" x1="430" y1="215" x2="430" y2="375" style="stroke:var(--plan-bg, #1F2622)" stroke-width="10"/>
+<line x1="427" y1="215" x2="427" y2="375" stroke="#EEF0EC" stroke-width="1.2" class="win"/>
+<line x1="433" y1="215" x2="433" y2="375" stroke="#EEF0EC" stroke-width="1.2" class="win"/>
+<line class="win-cut" x1="230" y1="385" x2="400" y2="385" style="stroke:var(--plan-bg, #1F2622)" stroke-width="10"/>
+<line x1="230" y1="382" x2="400" y2="382" stroke="#EEF0EC" stroke-width="1.2" class="win"/>
+<line x1="230" y1="388" x2="400" y2="388" stroke="#EEF0EC" stroke-width="1.2" class="win"/>
+<line class="win-cut" x1="50" y1="940" x2="50" y2="1080" style="stroke:var(--plan-bg, #1F2622)" stroke-width="10"/>
+<line x1="47" y1="940" x2="47" y2="1080" stroke="#EEF0EC" stroke-width="1.2" class="win"/>
+<line x1="53" y1="940" x2="53" y2="1080" stroke="#EEF0EC" stroke-width="1.2" class="win"/>
+<line class="win-cut" x1="120" y1="1135" x2="300" y2="1135" style="stroke:var(--plan-bg, #1F2622)" stroke-width="10"/>
+<line x1="120" y1="1132" x2="300" y2="1132" stroke="#EEF0EC" stroke-width="1.2" class="win"/>
+<line x1="120" y1="1138" x2="300" y2="1138" stroke="#EEF0EC" stroke-width="1.2" class="win"/>
+<line class="win-cut" x1="420" y1="1135" x2="560" y2="1135" style="stroke:var(--plan-bg, #1F2622)" stroke-width="10"/>
+<line x1="420" y1="1132" x2="560" y2="1132" stroke="#EEF0EC" stroke-width="1.2" class="win"/>
+<line x1="420" y1="1138" x2="560" y2="1138" stroke="#EEF0EC" stroke-width="1.2" class="win"/>
+<line class="win-cut" x1="50" y1="330" x2="50" y2="420" style="stroke:var(--plan-bg, #1F2622)" stroke-width="10"/>
+<line x1="47" y1="330" x2="47" y2="420" stroke="#EEF0EC" stroke-width="1.2" class="win"/>
+<line x1="53" y1="330" x2="53" y2="420" stroke="#EEF0EC" stroke-width="1.2" class="win"/>
+<line class="win-cut" x1="50" y1="770" x2="50" y2="860" style="stroke:var(--plan-bg, #1F2622)" stroke-width="10"/>
+<line x1="47" y1="770" x2="47" y2="860" stroke="#EEF0EC" stroke-width="1.2" class="win"/>
+<line x1="53" y1="770" x2="53" y2="860" stroke="#EEF0EC" stroke-width="1.2" class="win"/>
+<path d="M830,655 L795,655 M805,645 L795,655 L805,665" stroke="#EEF0EC" stroke-width="1.5" fill="none"/>
+<text x="840" y="686" fill="#EEF0EC" font-size="18" opacity=".7" text-anchor="start" direction="rtl">כניסה</text>
+<text class="lbl" data-for="living" x="680" y="400" fill="#EEF0EC" font-size="22" font-weight="300" text-anchor="middle" opacity="1">סלון · פינת אוכל · מטבח</text>
+<text class="dim" data-for="living" x="680" y="426" fill="#C98A5E" font-size="17" font-family="Cormorant Garamond, serif" text-anchor="middle" direction="ltr">7.03 m</text>
+<text class="lbl" data-for="balcony" x="330" y="210" fill="#EEF0EC" font-size="19" font-weight="300" text-anchor="middle" opacity="1">מרפסת</text>
+<text class="dim" data-for="balcony" x="330" y="236" fill="#C98A5E" font-size="17" font-family="Cormorant Garamond, serif" text-anchor="middle" direction="ltr">12 m²</text>
+<text class="lbl" data-for="master" x="308" y="545" fill="#EEF0EC" font-size="19" font-weight="300" text-anchor="middle" opacity="1">חדר הורים</text>
+<text class="dim" data-for="master" x="308" y="571" fill="#C98A5E" font-size="17" font-family="Cormorant Garamond, serif" text-anchor="middle" direction="ltr">4.20 × 2.88</text>
+<text class="lbl" data-for="mbath" x="122" y="430" fill="#EEF0EC" font-size="16" font-weight="300" text-anchor="middle" opacity="0.62">רחצה הורים</text>
+<text class="lbl" data-for="laundry" x="122" y="640" fill="#EEF0EC" font-size="16" font-weight="300" text-anchor="middle" opacity="0.62">שירות</text>
+<text class="lbl" data-for="bath" x="170" y="815" fill="#EEF0EC" font-size="19" font-weight="300" text-anchor="middle" opacity="1">חדר רחצה</text>
+<text class="dim" data-for="bath" x="170" y="841" fill="#C98A5E" font-size="17" font-family="Cormorant Garamond, serif" text-anchor="middle" direction="ltr">2.94 × 2.16</text>
+<text class="lbl" data-for="bed2" x="205" y="1015" fill="#EEF0EC" font-size="19" font-weight="300" text-anchor="middle" opacity="1">חדר שינה</text>
+<text class="lbl" data-for="bed3" x="487" y="975" fill="#EEF0EC" font-size="16" font-weight="300" text-anchor="middle" opacity="0.62">חדר שינה</text>
+<text class="dim" data-for="bed3" x="487" y="1001" fill="#C98A5E" font-size="17" font-family="Cormorant Garamond, serif" text-anchor="middle" direction="ltr">3.90 × 2.95</text>
+<text class="lbl" data-for="mamad" x="732" y="1130" fill="#EEF0EC" font-size="16" font-weight="300" text-anchor="middle" opacity="0.62">ממ״ד</text>
+<text class="dim" data-for="mamad" x="732" y="1156" fill="#C98A5E" font-size="17" font-family="Cormorant Garamond, serif" text-anchor="middle" direction="ltr">3.70 × 2.85</text>
+<text class="lbl" data-for="wc" x="695" y="890" fill="#EEF0EC" font-size="16" font-weight="300" text-anchor="middle" opacity="0.62">שירותי אורחים</text>
+<g transform="translate(900,90)"><line x1="0" y1="34" x2="0" y2="-6" stroke="#C98A5E" stroke-width="1.5"/><path d="M-7,6 L0,-8 L7,6" fill="none" stroke="#C98A5E" stroke-width="1.5"/><text x="0" y="58" fill="#C98A5E" font-size="20" font-family="Cormorant Garamond, serif" text-anchor="middle">N</text></g>
+</svg>

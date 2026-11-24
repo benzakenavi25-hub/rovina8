@@ -70,26 +70,28 @@
   });
   initMenu();
   const LB = initLightbox();
-  initGallery();
+  const gcount = name => { try { if (window.goatcounter && goatcounter.count) goatcounter.count({ path: name, title: name, event: true }); } catch (_) {} };
   const BA = initBeforeAfter();
   const SHEET = initRoomSheet();
   initFloors();
   initVisit();
-  initCorner();
-  initKeys();
+  initRooms();
+  initDeck();
   initShare();
 
   /* ---------------- top bar · progress · pill (plain scroll listener: cheap) ---------------- */
   const bar = $('.topbar'), prog = $('.progress i'), hero = $('#hero'), sig = $('#house .sig-stage'), motif = $('.motif');
-  const darkMotif = root.dataset.theme === 'dark';   // only the tall tree-rings layer drifts; grid and rays stay put
+  // the tall motif layers drift slower than the page (rings 0.9×, slabs 0.88×); grid and rays stay put. Never on touch.
+  const MF = root.dataset.theme === 'green' ? 0.12 : 0.1;
+  const darkMotif = (root.dataset.theme === 'dark' || root.dataset.theme === 'green') && !matchMedia('(pointer: coarse)').matches;
   let lastY = scrollY;
-  const sizeMotif = () => { if (!darkMotif || !motif) return; motif.style.height = Math.ceil(innerHeight + Math.max(0, root.scrollHeight - innerHeight) * 0.1 + 2) + 'px'; };
+  const sizeMotif = () => { if (!darkMotif || !motif) return; motif.style.height = Math.ceil(innerHeight + Math.max(0, root.scrollHeight - innerHeight) * MF + 2) + 'px'; };
   function onScroll() {
     const y = scrollY, max = root.scrollHeight - innerHeight;
     prog.style.transform = `scaleX(${max > 0 ? Math.min(1, y / max) : 0})`;
     // the page ends at the footer: no rubber-band past it (in-app browsers show white there); pull-to-refresh at the top stays
     root.classList.toggle('at-end', max > 0 && y > max - innerHeight * 0.6);
-    if (darkMotif && motif && !reduce) motif.style.transform = `translate3d(0, ${(-y * 0.1).toFixed(1)}px, 0)`;
+    if (darkMotif && motif && !reduce) motif.style.transform = `translate3d(0, ${(-y * MF).toFixed(1)}px, 0)`;
     const heroBottom = hero ? hero.offsetTop + hero.offsetHeight : 0;
     bar.classList.toggle('is-solid', y > 40);
     if (Math.abs(y - lastY) > 6) { bar.classList.toggle('is-up', y > lastY && y > 120 && y > heroBottom - 60); lastY = y; }
@@ -101,7 +103,7 @@
   const pill = $('.pill');
   const noPillZones = ['#hero', '#house .sig-stage', '#gardens .gd-stage'].map(s => $(s)).filter(Boolean);
   const visit = $('#visit');
-  const guard = $$('.sh, .fl-toggle, .fl-infos, .fl-btns, .price-sig, .facts-grid, .extras, .house-line, .text-link, .ba-chips, .ba-note, .cf-meta, .cf-bar, .cn-hint, .cn-btns, .cn-cap, .cn-note, .ky-hint, .ky-btns, .ky-cap, .ky-note, .near');
+  const guard = $$('.sh, .fl-toggle, .fl-infos, .fl-btns, .price-sig, .facts-grid, .extras, .house-line, .text-link, .ba-chips, .ba-note, .rm-hint, .rm-btns, .rm-step, .rm-cap, .rm-note, .bc-under, .bc-line, .incl, .dk-meta, .dk-hint, .near');
   const frames = $$('.frame').filter(f => !f.closest('#floors, #hero, .room-sheet'));
   let pillHidden = true;
   function updatePill() {
@@ -183,7 +185,7 @@
 
   /* ---------------- the intro, then the hero cascade ---------------- */
   if (hero) {
-    const hframe = $('.hero-frame', hero), himg = $('.hero-img', hero);
+    const hframe = $('.hero-frame', hero), himg = $('.hero-img', hero), shut = $('.shutter', hero);
     const heroIn = (t, at) => {
       const S = 0.08;
       hideFrame(hframe);
@@ -193,6 +195,7 @@
       t.fromTo($('.topbar-line', bar), { scaleX: 0 }, { scaleX: 1, duration: 0.55, ease: 'power2.inOut' }, at);
       rise($('.hero-label', hero), 1); rise($('.hero-title', hero), 2); rise($('.hero-meta', hero), 3); rise($('.hero-price', hero), 4);
       t.fromTo($('.hero-rule', hero), { scaleX: 0 }, { scaleX: 1, duration: 0.55, ease: 'power2.inOut' }, at + 5 * S);
+      if (shut) return;   // with the shutter, the chip and the tour link rise after it opens
       rise($$('.hero-bottom > *, .film-under', hero), 6);
       rise($('.hero-chip', hero), 7);
     };
@@ -237,7 +240,30 @@
     // the film: the framed photo settles 1.06 → 1 as the page loads; no scroll effect, no pinning in the hero
     if (FILM) { if (!reduce) gsap.fromTo($$('.film-ph picture, .film-ph > img', hero), { scale: 1.06 }, { scale: 1, duration: 1.6, ease: 'power2.out', delay: 0.1 }); }
     // corner: the photo moves −6% → 0 inside its frame (the image is 107% tall, the frame clips it); nothing pins
-    else if (hero.classList.contains('hero-par')) gsap.fromTo(himg, { yPercent: -6 }, { yPercent: 0, ease: 'none', scrollTrigger: { trigger: hero, start: 'top top', end: 'bottom top', scrub: true } });
+    else if (hero.classList.contains('hero-par')) {
+      const sc = { trigger: hero, start: 'top top', end: 'bottom top', scrub: true };
+      gsap.fromTo(himg, { yPercent: -6 }, { yPercent: 0, ease: 'none', scrollTrigger: sc });
+      // light through the shutter: a faint louvre shadow comes up on the photo as the hero scrolls away
+      const lv = $('.hero-louvre', hero);
+      if (lv) gsap.fromTo(lv, { opacity: 0, y: 0 }, { opacity: 0.55, y: 40, ease: 'none', scrollTrigger: { ...sc } });
+    }
+    // the shutter (תריס): closed slats are the placeholder; once the photo has decoded (or 1.2s), they tilt open like louvres,
+    // roll up into the copper box, and the photo brightens; the box stays as a 2px bar. Nothing blocks scrolling.
+    if (shut) {
+      const slats = $$('.sh-slats i', shut), box = $('.sh-box', hero);
+      shut.style.animation = himg.style.animation = 'none';   // the CSS failsafe is for a page whose script never ran
+      gsap.set(himg, { scale: 1.04, filter: 'brightness(0.55)' });
+      const ready = Promise.race([himg.decode ? himg.decode().catch(() => {}) : Promise.resolve(), new Promise(r => setTimeout(r, 1200))]);
+      ready.then(() => {
+        const t = gsap.timeline({ onComplete: () => { shut.remove(); gsap.set(himg, { filter: 'none' }); ScrollTrigger.refresh(); } });
+        t.to(slats, { rotateX: 72, transformOrigin: '50% 0%', transformPerspective: 600, duration: 0.55, stagger: 0.03, ease: 'power2.inOut' }, 0)
+          .to(himg, { filter: 'brightness(0.85)', duration: 0.55, ease: 'power2.inOut' }, 0)
+          .to(slats, { yPercent: i => -100 * (i + 1), scaleY: 0.15, duration: 0.7, stagger: { each: 0.025, from: 'end' }, ease: 'power3.in' }, 0.35)
+          .to(himg, { filter: 'brightness(1)', scale: 1, duration: 0.9, ease: 'power2.out' }, 0.35)
+          .to(box, { scaleY: 1 / 3, duration: 0.4, ease: 'power2.inOut' }, 1.15)
+          .fromTo([...$$('.hero-bottom > *', hero), $('.hero-chip', hero)].filter(Boolean), { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.08, ease: 'power2.out' }, 1.1);
+      });
+    }
     // slow push-in on the hero photo as it scrolls away
     else gsap.fromTo(himg, { scale: 1 }, { scale: 1.06, ease: 'none', scrollTrigger: { trigger: hero, start: 'top top', end: 'bottom top', scrub: true } });
   }
@@ -304,7 +330,7 @@
       if (isBA && BA) tl.add(() => BA.hint(), 0.8);
     } });
     // the push-in is for single photos; the corner and keys frames hold switchable layers and stay still
-    if (!isBA && im && !fr.closest('#corner, #keys')) gsap.fromTo(im, { scale: 1 }, { scale: 1.05, ease: 'none', scrollTrigger: { trigger: fr, start: 'top 80%', end: 'bottom top', scrub: true } });
+    if (!isBA && im && !fr.closest('#rooms, #gallery') && !fr.classList.contains('bc-frame')) gsap.fromTo(im, { scale: 1 }, { scale: 1.05, ease: 'none', scrollTrigger: { trigger: fr, start: 'top 80%', end: 'bottom top', scrub: true } });
   });
 
   /* ---------------- the price: odometer roll + the grid draws in from the centre, once ---------------- */
@@ -323,6 +349,22 @@
       });
       tl.to($$('.pc', price), { opacity: 1, duration: 0.5, ease: 'power2.out' }, 0.9);
     } });
+  }
+
+  /* ---------------- included: each line icon draws in once (0.4s, staggered) ---------------- */
+  const incl = $('.incl');
+  if (incl) ScrollTrigger.create({ trigger: incl, start: 'top 88%', once: true, onEnter: () => {
+    $$('.incl-icon', incl).forEach((s, i) => gsap.to(s.children, { strokeDashoffset: 0, duration: 0.4, delay: i * 0.08, ease: 'power2.out' }));
+  } });
+
+  /* ---------------- the balcony: the wide photo pans inside its frame with the scroll (scrubbed, not pinned) ---------------- */
+  const bcf = $('.bc-frame');
+  if (bcf) {
+    const im = $('.bc-pan', bcf), fill = $('.bc-track b');
+    const sc = () => ({ trigger: bcf, start: 'top bottom', end: 'bottom top', scrub: 0.6, invalidateOnRefresh: true });
+    // starts on the left edge of the photo (the corner of the rail) and travels to its right edge
+    gsap.fromTo(im, { x: 0 }, { x: () => -Math.max(0, im.offsetWidth - bcf.offsetWidth), ease: 'none', scrollTrigger: sc() });
+    if (fill) gsap.fromTo(fill, { scaleX: 0 }, { scaleX: 1, ease: 'none', scrollTrigger: sc() });
   }
 
   /* ---------------- in numbers: count up once ---------------- */
@@ -571,75 +613,6 @@
     }
   }
 
-  function initGallery() {
-    const data = $('#gallery-data'), cf = $('.cf');
-    if (!data || !cf) return;
-    const photos = JSON.parse(data.textContent);
-    const track = $('.cf-track', cf), slides = $$('.cf-slide', track);
-    const cards = slides.map(sl => $('.cf-card', sl)), dims = slides.map(sl => $('.cf-dim', sl));
-    const segs = $$('.cf-seg'), now = $('.cf-now'), en = $('.cf-en'), he = $('.cf-he'), cap = $('.cf-cap');
-    const last = slides.length - 1;
-    let W = 1, active = 0, ticking = 0;
-    const prevA = slides.map(() => -1);
-    const measure = () => { W = slides[0].offsetWidth || 1; };
-    const setActive = i => {
-      if (i === active) return;
-      slides[active].classList.remove('is-on'); if (segs[active]) segs[active].classList.remove('is-on');
-      active = i;
-      slides[i].classList.add('is-on'); if (segs[i]) segs[i].classList.add('is-on');
-      now.textContent = pad2(i + 1); en.textContent = photos[i].latin; he.textContent = photos[i].he;
-      if (!reduce && cap.animate) cap.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 450, easing: 'cubic-bezier(.22,.9,.3,1)' });
-    };
-    const render = () => {
-      ticking = 0;
-      const p = track.scrollLeft / W;
-      for (let i = 0; i <= last; i++) {
-        const d = i - p, a = Math.min(1, Math.abs(d));
-        if (a === 1 && prevA[i] === 1) continue;
-        prevA[i] = a;
-        const sc = 1 - 0.22 * a, tx = -Math.sign(d) * a * W * 0.05;
-        cards[i].style.transform = `translate3d(${tx.toFixed(1)}px,0,0) scale(${sc.toFixed(4)})`;
-        cards[i].style.opacity = (1 - 0.6 * a).toFixed(3);
-        dims[i].style.opacity = (0.3 * a).toFixed(3);
-      }
-      setActive(clamp(Math.round(p), 0, last));
-    };
-    const go = (i, sm = true) => { i = clamp(i, 0, last); track.scrollTo({ left: i * W, behavior: sm && !reduce ? 'smooth' : 'auto' }); };
-    track.addEventListener('scroll', () => { if (!ticking) ticking = requestAnimationFrame(render); }, { passive: true });
-    addEventListener('resize', () => { measure(); prevA.fill(-1); go(active, false); render(); });
-    measure(); render();
-    const count = name => { try { if (window.goatcounter && goatcounter.count) goatcounter.count({ path: name, title: name, event: true }); } catch (_) {} };
-    const openLb = (i, c) => LB && (count('gallery-open'), LB.open(photos, i, c, { onClose: k => { go(k, false); if (cards[k]) cards[k].focus({ preventScroll: true }); } }));
-    cards.forEach((c, i) => c.addEventListener('click', () => {
-      if (track.dataset.dragged) return;
-      if (i === active) openLb(i, c); else go(i);
-    }));
-    segs.forEach((b, i) => b.addEventListener('click', () => go(i)));
-    $('.cf-prev', cf).addEventListener('click', () => go(active - 1));
-    $('.cf-next', cf).addEventListener('click', () => go(active + 1));
-    track.addEventListener('keydown', e => {
-      if (e.key === 'ArrowRight') { e.preventDefault(); go(active + 1); }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); go(active - 1); }
-      else if (e.key === 'Enter' && e.target === track) openLb(active, cards[active]);
-    });
-    let down = null;
-    track.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse' || e.button !== 0) return; down = { x: e.clientX, s: track.scrollLeft, moved: false, v: 0, lx: e.clientX, lt: performance.now() }; });
-    addEventListener('pointermove', e => {
-      if (!down) return;
-      const dx = e.clientX - down.x, t = performance.now();
-      if (!down.moved && Math.abs(dx) > 6) { down.moved = true; track.classList.add('is-drag'); track.dataset.dragged = '1'; }
-      if (down.moved) { track.scrollLeft = down.s - dx; down.v = (e.clientX - down.lx) / Math.max(1, t - down.lt); down.lx = e.clientX; down.lt = t; }
-    });
-    addEventListener('pointerup', () => {
-      if (!down) return;
-      const d = down; down = null;
-      if (!d.moved) return;
-      track.classList.remove('is-drag');
-      go(Math.round((track.scrollLeft - d.v * 220) / W));
-      setTimeout(() => { delete track.dataset.dragged; }, 50);
-    });
-  }
-
   /* ---- the room sheet: a hotspot on the plan opens that room's photo (sheet from the bottom / popover). One at a time. ---- */
   function initRoomSheet() {
     const sh = $('.room-sheet');
@@ -823,44 +796,173 @@
     });
     return select;
   }
-  const swapIn = el => { if (!reduce && el.animate) el.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.22,.9,.3,1)' }); };
+  function swapIn(el) { if (!reduce && el.animate) el.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.22,.9,.3,1)' }); }
+  // photos the section loader skips (data-dsrc): a module loads them when they are about to be shown
+  function loadLater(im) { if (im.dataset.dsrcset) im.srcset = im.dataset.dsrcset; im.src = im.dataset.dsrc; delete im.dataset.dsrc; delete im.dataset.dsrcset; }
+  const inView = el => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; };
 
-  /* ---- THE CORNER: a button lights its opening on the plan (wipe + spotlight) and crossfades in the photo taken from there ---- */
-  function initCorner() {
-    const sec = $('#corner'), dataEl = $('#corner-data');
+  /* ---- THE ROOMS: a room button (or a tap on the room in the plan) fills the room, its walls draw in, and the viewer shows its
+     photos. Step with the arrows, a horizontal swipe, or the arrow keys; tap the photo for full screen. Plain JS (WAAPI). ---- */
+  function initRooms() {
+    const sec = $('#rooms'), dataEl = $('#rooms-data');
     if (!sec || !dataEl) return;
-    const caps = JSON.parse(dataEl.textContent);
-    const draw = $('.cn-draw', sec), hits = $$('.cn-hit', sec), phs = $$('.cn-ph', sec), cap = $('.cn-cap', sec), view = $('#cn-view');
-    let cur = 0;
-    tabs($('.cn-btns', sec), i => {
+    const data = JSON.parse(dataEl.textContent);
+    const svg = $('.rm-svg', sec), list = $('.rm-btns', sec), btns = $$('.rm-btn', sec), phs = $$('.rm-ph', sec);
+    const cap = $('.rm-cap', sec), view = $('#rm-view'), step = $('.rm-step', sec), count = $('.rm-count', sec), opener = $('.rm-open', sec);
+    const walls = $$('.wall', svg).map(w => ({ w, L: w.getTotalLength ? w.getTotalLength() : 0, b: w.getBBox ? w.getBBox() : null }));
+    let cur = 0, k = 0, swipe = null;
+    const show = j => {
+      const id = data[cur].id, n = data[cur].photos.length;
+      k = (j + n) % n;
+      phs.forEach(p => { if (p.dataset.room === id) $$('img[data-dsrc]', p).forEach(loadLater); p.classList.toggle('is-on', p.dataset.room === id && +p.dataset.k === k); });
+      count.innerHTML = `<b>${pad2(k + 1)}</b> / ${pad2(n)}`;
+      step.hidden = n < 2;
+    };
+    // the walls around the room (bounding boxes within 12 units) draw themselves in copper
+    const drawWalls = id => {
+      const r = $(`.room[data-room="${id}"]`, svg);
+      if (reduce || !r || !r.getBBox) return;
+      const b = r.getBBox(), m = 12;
+      let n = 0;
+      walls.forEach(({ w, L, b: a }) => {
+        if (!a || !L || !w.animate || a.x > b.x + b.width + m || a.x + a.width < b.x - m || a.y > b.y + b.height + m || a.y + a.height < b.y - m) return;
+        w.style.strokeDasharray = L;
+        w.animate([{ strokeDashoffset: L }, { strokeDashoffset: 0 }], { duration: 600, delay: n++ * 20, easing: 'cubic-bezier(.22,.9,.3,1)', fill: 'backwards' });
+      });
+    };
+    const mark = id => {
+      $$('.room', svg).forEach(r => r.classList.toggle('is-on', r.dataset.room === id));
+      $$('.lbl', svg).forEach(l => l.classList.toggle('is-on', l.dataset.for === id));
+    };
+    const select = tabs(list, i => {
       if (i === cur) return;
       cur = i;
-      hits.forEach((h, k) => h.classList.toggle('is-on', k === i));
-      draw.setAttribute('style', hits[i].dataset.v);
-      phs.forEach((p, k) => { p.classList.toggle('is-on', k === i); if (k === i) $$('img[data-src]', p).forEach(loadImg); });
-      cap.innerHTML = caps[i];
-      swapIn(cap);
-      view.setAttribute('aria-labelledby', 'cn-tab-' + i);
+      mark(data[i].id); drawWalls(data[i].id); show(0);
+      cap.innerHTML = data[i].cap; swapIn(cap);
+      view.setAttribute('aria-labelledby', 'rm-tab-' + i);
+      // the active chip scrolls into view sideways, never moving the page
+      if (list.scrollWidth > list.clientWidth && inView(list)) btns[i].scrollIntoView({ inline: 'center', block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
     });
+    $$('.room.is-click', svg).forEach(r => r.addEventListener('click', () => { const i = data.findIndex(x => x.id === r.dataset.room); if (i >= 0) select(i); }));
+    $('.rm-prev', sec).addEventListener('click', () => show(k - 1));
+    $('.rm-next', sec).addEventListener('click', () => show(k + 1));
+    const fr = $('.rm-frame-ph', sec);
+    fr.addEventListener('pointerdown', e => { swipe = { x: e.clientX, y: e.clientY }; });
+    fr.addEventListener('pointerup', e => {
+      if (!swipe) return;
+      const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y;
+      swipe = Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) ? 'moved' : null;
+      if (swipe && data[cur].photos.length > 1) show(k + (dx < 0 ? 1 : -1));
+    });
+    fr.addEventListener('pointercancel', () => { swipe = null; });
+    opener.addEventListener('click', () => {
+      if (swipe === 'moved') { swipe = null; return; }
+      if (LB) LB.open(data[cur].photos, k, opener, { onClose: j => { show(j); opener.focus({ preventScroll: true }); } });
+    });
+    view.addEventListener('keydown', e => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault(); show(k + (e.key === 'ArrowRight' ? 1 : -1));
+    });
+    mark(data[0].id);
   }
 
-  /* ---- THE KEYS: each key opens its own crop of the scanned plan in the one framed viewer ---- */
-  function initKeys() {
-    const sec = $('#keys'), dataEl = $('#keys-data');
-    if (!sec || !dataEl) return;
-    const items = JSON.parse(dataEl.textContent);
-    const imgs = $$('.ky-img', sec), fr = $('.ky-frame', sec), cap = $('.ky-cap', sec), view = $('#ky-view');
-    let cur = 0;
-    tabs($('.ky-btns', sec), i => {
-      if (i === cur) return;
-      cur = i;
-      loadImg(imgs[i]);
-      imgs.forEach((im, k) => im.classList.toggle('is-on', k === i));
-      fr.style.setProperty('--ar', items[i].ar); fr.style.setProperty('--arn', items[i].arn);
-      cap.innerHTML = items[i].cap;
-      swapIn(cap);
-      view.setAttribute('aria-labelledby', 'ky-tab-' + i);
+  /* ---- GALLERY · the print deck: the top print is straight, three more lie under it at seeded tilts. Next = the top print flies
+     off and goes to the bottom; previous = the bottom print comes back on top. Drag / swipe, buttons, arrow keys; tap = full screen.
+     WAAPI only, so it works without GSAP. Reduced motion: crossfades, no tilt. ---- */
+  function initDeck() {
+    const deck = $('.deck'), dataEl = $('#gallery-data');
+    if (!deck || !dataEl) return;
+    const photos = JSON.parse(dataEl.textContent), stage = $('.dk-stack', deck), cards = $$('.dk-card', deck), n = cards.length;
+    const cap = $('.dk-cap'), capEn = $('.label-en', cap), capHe = $('.dk-he', cap), now = $('.dk-count b');
+    const rtl = getComputedStyle(deck).direction === 'rtl';
+    const POSE = [[0, 1, 1], [6, 0.985, 0.82], [12, 0.97, 0.7], [18, 0.955, 0.6]];
+    const OUT = 'cubic-bezier(.22,1,.36,1)', IN = 'cubic-bezier(.55,0,1,.45)';
+    let top = 0, busy = false, swiped = false, drag = null;
+    const slot = i => (i - top + n) % n;
+    const pose = (c, s) => `translate3d(0,${POSE[s][0]}px,0) rotate(${s && !reduce ? parseFloat(c.style.getPropertyValue('--r')) || 0 : 0}deg) scale(${reduce ? 1 : POSE[s][1]})`;
+    const loadCard = c => $$('img[data-dsrc]', c).forEach(loadLater);
+    const anim = (el, kf, dur, ease) => (el.animate && dur ? el.animate(kf, { duration: dur, easing: ease }) : null);
+    const layout = moved => cards.forEach((c, i) => {
+      const s = slot(i), was = c.style.visibility !== 'hidden';
+      c.style.zIndex = n - s;
+      c.classList.toggle('is-top', s === 0);
+      if (s < 7) loadCard(c);   // the 4 visible prints + the next 3
+      if (s > 3) { c.style.visibility = 'hidden'; return; }
+      const from = c.style.transform, to = pose(c, s);
+      c.style.visibility = ''; c.style.transform = to; c.style.filter = s ? `brightness(${POSE[s][2]})` : '';
+      if (!moved) return;
+      if (!was) anim(c, [{ opacity: 0 }, { opacity: 1 }], 400, 'ease');   // re-enters at the bottom of the stack
+      else if (from && from !== to && !reduce) anim(c, [{ transform: from }, { transform: to }], 400, OUT);
     });
+    const update = () => {
+      const p = photos[top];
+      capEn.textContent = p.latin; capHe.textContent = p.he; now.textContent = pad2(top + 1);
+      swapIn(cap);
+    };
+    const settle = ms => setTimeout(() => { busy = false; }, ms);
+    // dir: +1 flies to the right, −1 to the left; buttons and keys fly toward the start side (right in RTL)
+    const next = (dir = rtl ? 1 : -1) => {
+      if (busy) return;
+      busy = true;
+      const c = cards[top], W = stage.offsetWidth;
+      const a = reduce ? anim(c, [{ opacity: 1 }, { opacity: 0 }], 250, 'ease')
+        : anim(c, [{ transform: c.style.transform || pose(c, 0) }, { transform: `translate3d(${dir * W * 1.1}px,-20px,0) rotate(${dir * 14}deg)` }], 450, IN);
+      const done = () => { top = (top + 1) % n; c.style.visibility = 'hidden'; layout(true); update(); settle(400); };
+      if (a) { a.onfinish = done; } else done();
+    };
+    const prev = () => {
+      if (busy) return;
+      busy = true;
+      top = (top - 1 + n) % n;
+      const c = cards[top], W = stage.offsetWidth;
+      c.style.visibility = 'hidden';   // treat it as arriving, not as a moved print
+      layout(true);
+      if (!reduce) anim(c, [{ transform: `translate3d(${(rtl ? 1 : -1) * W * 1.1}px,-20px,0) rotate(${rtl ? 14 : -14}deg)` }, { transform: pose(c, 0) }], 450, OUT);
+      update(); settle(450);
+    };
+    const open = () => { gcount('gallery-open'); if (LB) LB.open(photos, top, deck, { onClose: k => { if (k !== top) { top = k; layout(false); update(); } deck.focus({ preventScroll: true }); } }); };
+    $('.dk-next').addEventListener('click', () => next());
+    $('.dk-prev').addEventListener('click', prev);
+    deck.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); open(); return; }
+      const fwd = { ArrowLeft: rtl, ArrowRight: !rtl }[e.key];
+      if (fwd == null) return;
+      e.preventDefault(); fwd ? next() : prev();
+    });
+    // drag the top print; vertical gestures stay with the page (touch-action: pan-y)
+    stage.addEventListener('pointerdown', e => {
+      const c = e.target.closest('.dk-card');
+      if (busy || e.button || !c || !c.classList.contains('is-top')) return;
+      drag = { c, id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, on: false, v: 0, lx: e.clientX, lt: performance.now() };
+    });
+    stage.addEventListener('pointermove', e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (!drag.on) {
+        if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { drag = null; return; }
+        if (Math.abs(dx) < 6) return;
+        drag.on = true;
+        try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+      }
+      const t = performance.now();
+      drag.v = (e.clientX - drag.lx) / Math.max(1, t - drag.lt); drag.lx = e.clientX; drag.lt = t; drag.dx = dx;
+      drag.c.style.transform = `translate3d(${dx}px,0,0) rotate(${reduce ? 0 : clamp(dx / 18, -16, 16)}deg)`;
+    });
+    const up = e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const d = drag; drag = null;
+      if (!d.on) { if (e.type === 'pointerup') open(); return; }
+      if (Math.abs(d.dx) > 90 || Math.abs(d.v) > 0.5) {
+        if (!swiped) { swiped = true; gcount('gallery-swipe'); }
+        next(Math.sign(d.dx || d.v) || 1);
+      } else {
+        const from = d.c.style.transform;
+        d.c.style.transform = pose(d.c, 0);
+        if (!reduce) anim(d.c, [{ transform: from }, { transform: d.c.style.transform }], 350, 'cubic-bezier(.34,1.56,.64,1)');
+      }
+    };
+    stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
+    layout(false);
   }
 
   /* ---- share with a partner: a plain wa.me link; upgraded to the native share sheet where there is one ---- */
