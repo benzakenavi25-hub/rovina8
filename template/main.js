@@ -867,7 +867,8 @@
   }
 
   /* ---- GALLERY · the print deck: the top print is straight, three more lie under it at seeded tilts. Next = the top print flies
-     off and goes to the bottom; previous = the bottom print comes back on top. Drag / swipe, buttons, arrow keys; tap = full screen.
+     off and goes to the bottom; previous = the bottom print comes back on top. Tap the print = next; drag / swipe, buttons, arrow
+     keys; the corner button (or Enter) = full screen. No input is ever dropped: a new move first finishes the running one instantly.
      WAAPI only, so it works without GSAP. Reduced motion: crossfades, no tilt. ---- */
   function initDeck() {
     const deck = $('.deck'), dataEl = $('#gallery-data');
@@ -877,12 +878,24 @@
     const rtl = getComputedStyle(deck).direction === 'rtl';
     const POSE = [[0, 1, 1], [6, 0.985, 0.82], [12, 0.97, 0.7], [18, 0.955, 0.6]];
     const OUT = 'cubic-bezier(.22,1,.36,1)', IN = 'cubic-bezier(.55,0,1,.45)';
-    let top = 0, busy = false, swiped = false, drag = null;
+    let top = 0, fly = null, drag = null;
+    const once = new Set(), live = new Set();
+    const countOnce = name => { if (!once.has(name)) { once.add(name); gcount(name); } };
     const slot = i => (i - top + n) % n;
     const pose = (c, s) => `translate3d(0,${POSE[s][0]}px,0) rotate(${s && !reduce ? parseFloat(c.style.getPropertyValue('--r')) || 0 : 0}deg) scale(${reduce ? 1 : POSE[s][1]})`;
     const loadCard = c => $$('img[data-dsrc]', c).forEach(loadLater);
-    const anim = (el, kf, dur, ease) => (el.animate && dur ? el.animate(kf, { duration: dur, easing: ease }) : null);
-    const layout = moved => cards.forEach((c, i) => {
+    const anim = (el, kf, dur, ease, fill = 'none') => {
+      if (!el.animate || !dur) return null;
+      const a = el.animate(kf, { duration: dur, easing: ease, fill });
+      live.add(a); a.addEventListener('finish', () => live.delete(a)); a.addEventListener('cancel', () => live.delete(a));
+      return a;
+    };
+    // the print that flew off lands at the bottom of the stack (hidden beyond the 4th place)
+    const land = () => { if (!fly) return; const f = fly; fly = null; if (f.a) f.a.cancel(); f.c.style.pointerEvents = ''; layout(false); };
+    // a new input finishes whatever is still moving, at once; the state (top) is always already up to date
+    const flush = () => { land(); [...live].forEach(a => a.finish()); live.clear(); };
+    const layout = (moved, skip) => cards.forEach((c, i) => {
+      if (c === skip) return;
       const s = slot(i), was = c.style.visibility !== 'hidden';
       c.style.zIndex = n - s;
       c.classList.toggle('is-top', s === 0);
@@ -899,48 +912,52 @@
       capEn.textContent = p.latin; capHe.textContent = p.he; now.textContent = pad2(top + 1);
       swapIn(cap);
     };
-    const settle = ms => setTimeout(() => { busy = false; }, ms);
-    // dir: +1 flies to the right, −1 to the left; buttons and keys fly toward the start side (right in RTL)
-    const next = (dir = rtl ? 1 : -1) => {
-      if (busy) return;
-      busy = true;
-      const c = cards[top], W = stage.offsetWidth;
-      const a = reduce ? anim(c, [{ opacity: 1 }, { opacity: 0 }], 250, 'ease')
-        : anim(c, [{ transform: c.style.transform || pose(c, 0) }, { transform: `translate3d(${dir * W * 1.1}px,-20px,0) rotate(${dir * 14}deg)` }], 450, IN);
-      const done = () => { top = (top + 1) % n; c.style.visibility = 'hidden'; layout(true); update(); settle(400); };
-      if (a) { a.onfinish = done; } else done();
+    // dir: +1 flies to the right, −1 to the left; taps, buttons and keys fly toward the start side (right in RTL)
+    const next = (dir = rtl ? 1 : -1, from) => {
+      flush();
+      const c = cards[top], W = stage.offsetWidth, start = from || c.style.transform || pose(c, 0);
+      top = (top + 1) % n;
+      layout(true, c); update();
+      c.style.visibility = ''; c.style.zIndex = n + 1; c.style.pointerEvents = 'none'; c.classList.remove('is-top');
+      const a = reduce ? anim(c, [{ opacity: 1 }, { opacity: 0 }], 250, 'ease', 'forwards')
+        : anim(c, [{ transform: start }, { transform: `translate3d(${dir * W * 1.1}px,-20px,0) rotate(${dir * 14}deg)` }], 450, IN, 'forwards');
+      fly = { c, a };
+      if (a) a.addEventListener('finish', () => { if (fly && fly.c === c) land(); }); else land();
     };
     const prev = () => {
-      if (busy) return;
-      busy = true;
+      flush();
       top = (top - 1 + n) % n;
       const c = cards[top], W = stage.offsetWidth;
-      c.style.visibility = 'hidden';   // treat it as arriving, not as a moved print
-      layout(true);
+      c.style.visibility = 'hidden';   // arriving on top, not a moved print
+      layout(true); update();
       if (!reduce) anim(c, [{ transform: `translate3d(${(rtl ? 1 : -1) * W * 1.1}px,-20px,0) rotate(${rtl ? 14 : -14}deg)` }, { transform: pose(c, 0) }], 450, OUT);
-      update(); settle(450);
     };
-    const open = () => { gcount('gallery-open'); if (LB) LB.open(photos, top, deck, { onClose: k => { if (k !== top) { top = k; layout(false); update(); } deck.focus({ preventScroll: true }); } }); };
+    const open = () => { flush(); if (LB) LB.open(photos, top, deck, { onClose: k => { if (k !== top) { top = k; layout(false); update(); } deck.focus({ preventScroll: true }); } }); };
     $('.dk-next').addEventListener('click', () => next());
     $('.dk-prev').addEventListener('click', prev);
+    // full screen: the corner button on the top print (counted by its data-goatcounter-click); never a tap or a drag
+    $$('.dk-full', deck).forEach(b => {
+      b.addEventListener('pointerdown', e => e.stopPropagation());
+      b.addEventListener('click', e => { e.stopPropagation(); open(); });
+    });
     deck.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); open(); return; }
+      if (e.key === 'Enter' && e.target === deck) { e.preventDefault(); gcount('gallery-open'); open(); return; }
       const fwd = { ArrowLeft: rtl, ArrowRight: !rtl }[e.key];
       if (fwd == null) return;
       e.preventDefault(); fwd ? next() : prev();
     });
-    // drag the top print; vertical gestures stay with the page (touch-action: pan-y)
+    // tap (< 8px, < 350ms) = next; drag the top print to throw it; vertical gestures stay with the page (touch-action: pan-y)
     stage.addEventListener('pointerdown', e => {
-      const c = e.target.closest('.dk-card');
-      if (busy || e.button || !c || !c.classList.contains('is-top')) return;
-      drag = { c, id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, on: false, v: 0, lx: e.clientX, lt: performance.now() };
+      if (e.button || !e.target.closest('.dk-card')) return;
+      flush();
+      drag = { c: cards[top], id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), dx: 0, on: false, v: 0, lx: e.clientX, lt: performance.now() };
     });
     stage.addEventListener('pointermove', e => {
       if (!drag || e.pointerId !== drag.id) return;
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
       if (!drag.on) {
         if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { drag = null; return; }
-        if (Math.abs(dx) < 6) return;
+        if (Math.abs(dx) < 8) return;
         drag.on = true;
         try { stage.setPointerCapture(e.pointerId); } catch (_) {}
       }
@@ -951,10 +968,13 @@
     const up = e => {
       if (!drag || e.pointerId !== drag.id) return;
       const d = drag; drag = null;
-      if (!d.on) { if (e.type === 'pointerup') open(); return; }
-      if (Math.abs(d.dx) > 90 || Math.abs(d.v) > 0.5) {
-        if (!swiped) { swiped = true; gcount('gallery-swipe'); }
-        next(Math.sign(d.dx || d.v) || 1);
+      if (!d.on) {
+        if (e.type === 'pointerup' && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 8 && performance.now() - d.t < 350) { countOnce('gallery-tap'); next(); }
+        return;
+      }
+      if (Math.abs(d.dx) > 50 || Math.abs(d.v) > 0.35) {
+        countOnce('gallery-swipe');
+        next(Math.sign(d.dx || d.v) || 1, d.c.style.transform);
       } else {
         const from = d.c.style.transform;
         d.c.style.transform = pose(d.c, 0);

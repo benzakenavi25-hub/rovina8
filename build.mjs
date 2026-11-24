@@ -271,12 +271,9 @@ function writeSlabs() {
     d0.push(`M1000 ${Y}H${x0}V${Y + 5}H1000`);
     if (R() < 0.25) d0.push(`M${x0} ${Y + 5}V${Y + 45}`);
     const next = y + 300 + (R() - 0.5) * 60;
-    if (R() < 0.6) {
-      const span = len * (0.2 + R() * 0.15), h = f(70 + R() * 20), x1 = f(x0 + span);
-      let posts = '';
-      for (let x = x0 + 7; x <= x1; x += 14) posts += `M${f(x)} ${Y + 5}v${h}`;
-      d0.push(posts + `M${x0} ${Y + 5 + h}H${x1}`);
-    }
+    // v2.1: no rail posts (on phones they read as striped glitches). The draws that placed them are still consumed,
+    // so the same seed keeps every slab exactly where it was.
+    if (R() < 0.6) { R(); R(); }
     y = next;
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 3000" preserveAspectRatio="xMaxYMin slice"><path d="${d0.join('')}" fill="none" stroke="${ACCENT}" stroke-width="1" vector-effect="non-scaling-stroke" shape-rendering="geometricPrecision"/></svg>`;
@@ -641,7 +638,9 @@ function sections() {
         const R = rng(101 + i * 7), tilt = (R() < 0.5 ? -1 : 1) * (0.8 + R() * 2.7);
         // the top 4 load with the section; the rest load as the deck moves (data-dsrc, not picked up by the section loader)
         const im = img(k, { sizes: '(min-width: 900px) 900px, calc(100vw - 48px)' });
-        return `<figure class="dk-card" data-i="${i}" style="--r:${tilt.toFixed(2)}deg">${frame(i < 4 ? im : im.replace(' data-src=', ' data-dsrc=').replace(' data-srcset=', ' data-dsrcset='), { reveal: false })}</figure>`;
+        // full screen moved to a corner button (a tap on the print now means "next"); only the top print shows it
+        const full = `<button class="dk-full" type="button" aria-label="מסך מלא"${gc('gallery-open')}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 9.5v-5h5M4.5 4.5l5.5 5.5M19.5 14.5v5h-5M19.5 19.5L14 14"/></svg></button>`;
+        return `<figure class="dk-card" data-i="${i}" style="--r:${tilt.toFixed(2)}deg">${frame((i < 4 ? im : im.replace(' data-src=', ' data-dsrc=').replace(' data-srcset=', ' data-dsrcset=')) + full, { reveal: false })}</figure>`;
       }).join('\n      ')}
     </div>
   </div>
@@ -651,7 +650,7 @@ function sections() {
     <p class="dk-count num" dir="ltr"><b>01</b> / ${pad2(gal.length)}</p>
     <button class="dk-next" type="button" aria-label="התמונה הבאה"${gc('gallery-next')}>${L_ARR}</button>
   </div>
-  <p class="dk-hint">החליקו את התמונה, או לחצו עליה למסך מלא</p>
+  <p class="dk-hint">לחצו על התמונה לתמונה הבאה, או החליקו</p>
 </section>
 <script type="application/json" id="gallery-data">${JSON.stringify(gal.map((k, i) => ({ src: IMG[k].src[2000] || IMG[k].src[1000], alt: altOf(k), w: IMG[k].w, h: IMG[k].h, latin: GI[i].latin || '', he: GI[i].he || '' })))}</script>` : '';
   S.lightbox = `<div class="lightbox" role="dialog" aria-modal="true" aria-label="תצוגה במסך מלא" hidden>
@@ -740,7 +739,7 @@ function subPage(title, body) {
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="${GROUND}">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@200;300;400&family=Cormorant+Garamond:wght@300;400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@200;300;400;500&family=Cormorant+Garamond:wght@300;400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/styles.css?v={{v}}">
 </head>
 <body class="doc">
@@ -760,7 +759,7 @@ function writeSubPages(ver) {
   const contact = agents.map(a => `${esc(a.name)}, <a href="${telLink(a)}" dir="ltr">${esc(a.phone)}</a>`).join('<br>');
   const updated = new Date().toLocaleDateString('he-IL', { year: 'numeric', month: 'long' });
   const acc = subPage('הצהרת נגישות', `
-  <p>אנחנו רוצים שכל אחד יוכל להכיר את ${esc(d.title)} באתר הזה. האתר נבנה לפי הנחיות הנגישות WCAG 2.1 ברמה AA, ככל שהדבר אפשרי.</p>
+  <p>אנחנו רוצים שכל אחד יוכל להכיר את ${esc(d.title)} באתר הזה. האתר הותאם לפי תקנות שוויון זכויות לאנשים עם מוגבלות (התאמות נגישות לשירות), התשע״ג־2013, ולפי התקן הישראלי ת״י 5568, המבוסס על הנחיות WCAG ברמה AA.</p>
   <h2>מה נעשה באתר</h2>
   <ul>
     <li>מבנה כותרות ברור וניווט מלא במקלדת, כולל דילוג לתיאום ביקור.</li>
@@ -770,8 +769,13 @@ function writeSubPages(ver) {
     ${STAGE ? '<li>השוואת הצילום וההדמיה נשלטת גם במקשי החצים.</li>' : ''}
     ${ROOMSVG ? '<li>בחירת החדרים בתוכנית ודפדוף בגלריה נשלטים גם במקלדת, בחיצים וב־Enter.</li>' : ''}
   </ul>
+  ${ROOMSVG || (d.house && d.house.mapsQuery) ? `<h2>מגבלות ידועות</h2>
+  <ul>
+    ${ROOMSVG ? '<li>שרטוט התוכנית הוא איור להמחשה. שמות החדרים והמידות שלהם מופיעים גם כטקסט בכפתורי החדרים.</li>' : ''}
+    ${d.house && d.house.mapsQuery ? '<li>פתיחה במפה ומסלולי הליכה מעבירים ל־Google Maps, שירות חיצוני שהנגישות שלו אינה בשליטתנו.</li>' : ''}
+  </ul>` : ''}
   <h2>נתקלתם בבעיה?</h2>
-  <p>אם משהו באתר לא נגיש לכם, נשמח לשמוע ולתקן. אפשר לפנות אל:<br>${contact}</p>
+  <p>אם משהו באתר לא נגיש לכם, נשמח לשמוע ולתקן. אפשר לפנות אל:<br>${contact}${a0 && a0.whatsapp ? `<br><a href="https://wa.me/${esc(a0.whatsapp)}" target="_blank" rel="noopener">אפשר גם לשלוח הודעת וואטסאפ.</a>` : ''}</p>
   <p class="doc-date">עודכן: ${esc(updated)}</p>`);
   const priv = subPage('מדיניות פרטיות', `
   <p>האתר של ${esc(d.title)} הוא דף מידע על נכס. אין בו טפסים או הרשמה.</p>

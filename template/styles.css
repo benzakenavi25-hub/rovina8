@@ -760,3 +760,27 @@ html.js:not(.rm) .hero-shut .shutter { animation: intro-failsafe .4s ease 5s for
 html.js:not(.rm) .hero-shut .hero-img { animation: shut-failsafe .4s ease 5s forwards; }
 @keyframes shut-failsafe { to { filter: none; transform: none; } }
 .gallery .gal-head { padding: 0; }
+
+/* ---------- v2.1 ---------- */
+/* the deck: full screen is a corner button on the top print (a tap on the print = next) */
+.dk-full {
+  position: absolute; z-index: 3; top: 10px; left: 10px; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%;
+  background: rgba(31, 38, 34, .55); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); color: var(--fg); cursor: zoom-in;
+  opacity: 0; visibility: hidden; transition: opacity .2s ease, visibility 0s linear .2s;
+}
+.dk-full svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+.dk-card.is-top .dk-full { opacity: 1; visibility: visible; transition: opacity .2s ease .25s, visibility 0s; }
+.dk-full:focus-visible { outline-offset: 2px; }
+.dk-card { cursor: pointer; }
+html.rm .dk-full { transition: none; }
+
+/* the rooms plan: readable labels on phones (text only; the geometry stays) */
+@media (max-width: 699px) {
+  .rm-svg .lbl { font-size: 34px; }
+  .rm-svg .lbl:not([data-for="living"]):not([data-for="balcony"]):not([data-for="master"]):not([data-for="bath"]):not([data-for="bed2"]) { font-size: 26px; }
+  .rm-svg .dim { font-size: 27px; transform: translateY(8px); }
+}
+.rm-dims { white-space: nowrap; }
+
+/* the price on plaster: no slab mask on phones */
+@media (max-width: 699px) { .price-slabs { display: none; } }

@@ -92,6 +92,16 @@ const events = ['room-living', 'room-balcony', 'room-master', 'room-bed2', 'room
 const noEv = events.filter(e => !html.includes(`data-goatcounter-click="${e}"`) && !js.includes(`gcount('${e}')`));
 ok(noEv.length === 0, 'goatcounter click events', noEv.length ? 'missing ' + noEv.join(', ') : `${events.length} events`);
 
+// 10b · v2.1 delivery fixes
+ok(html.includes('data-goatcounter-click="gallery-open"'), 'gallery-open is in the markup (the full-screen button)');
+ok(html.includes('לחצו על התמונה לתמונה הבאה, או החליקו'), 'new deck hint text');
+const deckSrc = (js.match(/function initDeck\(\)[\s\S]*?\r?\n  }\r?\n/) || [''])[0];
+ok(deckSrc.length > 0 && !deckSrc.includes('if (busy) return;'), 'initDeck has no "if (busy) return;"');
+const slabD = fs.existsSync(slabs) ? (fs.readFileSync(slabs, 'utf8').match(/ d="([^"]*)"/) || [, ''])[1] : '';
+ok(slabD.length > 0 && !/v/.test(slabD), 'slabs.svg has no rail posts (no relative "v" segments)', `${(fs.statSync(slabs).size / 1024).toFixed(2)} KB`);
+for (const s of ['ת״י 5568', 'התשע״ג־2013', 'מגבלות ידועות']) ok(acc.includes(s), `accessibility.html has "${s}"`);
+ok([html, acc, priv].every(t => t.includes('Heebo:wght@200;300;400;500')), 'fonts URL loads Heebo 500 (all pages)');
+
 // 11 · the script parses
 try { execFileSync(process.execPath, ['--check', path.join(ROOT, 'assets/js/main.js')], { stdio: 'pipe' }); ok(true, 'node --check assets/js/main.js'); }
 catch (e) { ok(false, 'node --check assets/js/main.js', String(e.stderr || e.message).split('\n')[0]); }
