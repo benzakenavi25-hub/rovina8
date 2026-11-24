@@ -1,0 +1,9 @@
+_screens/
+.claude/
+_tools/
+node_modules/
+listings/*/_debug/
+*.md
+!README.md
+*.zip
+listings/*/staging/src/

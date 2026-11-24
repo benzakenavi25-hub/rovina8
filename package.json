@@ -1,0 +1,25 @@
+{
+  "name": "raziel25",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/benzakenavi25-hub/raziel25.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/benzakenavi25-hub/raziel25/issues"
+  },
+  "homepage": "https://github.com/benzakenavi25-hub/raziel25#readme",
+  "dependencies": {
+    "pdf-to-png-converter": "^4.3.0",
+    "sharp": "^0.34.5"
+  }
+}
